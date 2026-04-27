@@ -40,14 +40,14 @@ mise install
 
 # 2. フロントとバックの依存関係を一括インストール
 pnpm install:all
-
+```
 
 ## 💻 3. 開発コマンド
 
 全サービスの一括起動 (Turborepo)
 ```bash
 pnpm dev
-
+```
 - Frontend: http://localhost:3000
 - Backend: http://localhost:8000
 
@@ -55,7 +55,6 @@ pnpm dev
 
 個別起動
 - フロントのみ: pnpm --filter team4_jichitai dev
-
 - バックのみ: pnpm --filter backend dev
 
 
@@ -63,12 +62,11 @@ pnpm dev
 ライブラリの追加
 依存関係を追加した後は、必ず生成された Lock ファイルをコミットしてください。
 
-フロント: cd apps/frontend && pnpm add <パッケージ名>
-
-バック: cd apps/backend && poetry add <パッケージ名>
+- フロント: cd apps/frontend && pnpm add <パッケージ名>
+- バック: cd apps/backend && poetry add <パッケージ名>
 
 ディレクトリ構成
-Plaintext
+```Plaintext
 team4_app/
 ├── apps/
 │   ├── frontend/  # Next.js (React / TypeScript)
@@ -76,14 +74,17 @@ team4_app/
 ├── package.json   # モノリポ全体管理
 ├── turbo.json     # 実行パイプライン設定
 └── .tool-versions # 言語バージョン固定ファイル
+```
+
 環境変数
 .env などのファイルは Git 管理外です。
-必要な設定値（APIキー等）は別途チーム内で共有します。
 
-❓ 5. 困ったときは
-「コマンドが見つからない」: mise や poetry のパス設定を確認し、source ~/.zshrc を実行してください。
+##❓ 5. 困ったときは
+-「コマンドが見つからない」: mise や poetry のパス設定を確認し、source ~/.zshrc を実行してください。
+-「ライブラリのエラーが出る」: pnpm install:all を再度実行してください。
 
-「ライブラリのエラーが出る」: pnpm install:all を再度実行してください。
-
+## 6. 注意点
+- これはAIによって生成したREADMEです。
+- 誤りがある可能性もあるので、その場合はPR出してください。
 
 
