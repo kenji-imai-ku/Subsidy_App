@@ -1,8 +1,0 @@
-dyld[72695]: Library not loaded: @rpath/libpython3.11.dylib
-  Referenced from: <4C4C4459-5555-3144-A1FB-C936AD8F9C95> /Users/hiramatsu/.local/share/mise/installs/poetry/2.3.4/venv/bin/python3
-  Reason: tried: '/Users/hiramatsu/.local/share/mise/installs/poetry/2.3.4/venv/lib/libpython3.11.dylib' (no such file), '/Users/hiramatsu/.local/share/mise/installs/poetry/2.3.4/venv/lib/libpython3.11.dylib' (no such file)
-
-Traceback:
-
-  File "<stdin>", line 936, in main
-  File "<stdin>", line 575, in run
