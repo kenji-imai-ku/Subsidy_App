@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 
+// 都道府県用の固定値（日本の全47都道府県）
 const PREFECTURES = [
   "北海道",
   "青森県",
@@ -50,8 +51,9 @@ const PREFECTURES = [
   "宮崎県",
   "鹿児島県",
   "沖縄県",
-];
+] as const;
 
+// 世帯年収用の固定値
 const INCOME_OPTIONS = [
   "200万円未満",
   "200万円〜400万円未満",
@@ -59,12 +61,14 @@ const INCOME_OPTIONS = [
   "600万円〜800万円未満",
   "800万円〜1,000万円未満",
   "1,000万円以上",
-];
+] as const;
 
-const FAMILY_OPTIONS = ["独身", "配偶者あり", "ひとり親", "その他"];
-const GENDER_OPTIONS = ["男性", "女性", "その他", "回答しない"];
-const TAX_EXEMPT_OPTIONS = ["はい", "いいえ", "わからない"];
+// 家族構成・性別・非課税世帯の選択肢
+const FAMILY_OPTIONS = ["独身", "配偶者あり", "ひとり親", "その他"] as const;
+const GENDER_OPTIONS = ["男性", "女性", "その他", "回答しない"] as const;
+const TAX_EXEMPT_OPTIONS = ["はい", "いいえ", "わからない"] as const;
 
+// プロフィール入力フォーム全体の型
 type FormData = {
   name: string;
   prefecture: string;
@@ -79,10 +83,12 @@ type FormData = {
 };
 
 const currentYear = new Date().getFullYear();
+// 生年月日の年/月プルダウンを生成
 const years = Array.from({ length: 101 }, (_, i) => String(currentYear - i));
 const months = Array.from({ length: 12 }, (_, i) => String(i + 1));
 
 export default function ProfileInputPage() {
+  // 画面内の入力値を1つのstateで管理
   const [formData, setFormData] = useState<FormData>({
     name: "",
     prefecture: "",
@@ -96,6 +102,7 @@ export default function ProfileInputPage() {
     taxExempt: "",
   });
 
+  // 選択済みの年・月から日数を計算
   const days = useMemo(() => {
     const year = Number(formData.birthYear);
     const month = Number(formData.birthMonth);
@@ -107,6 +114,8 @@ export default function ProfileInputPage() {
     );
   }, [formData.birthYear, formData.birthMonth]);
 
+  // フォーム値を更新する共通関数
+  // 年/月の変更時に日を空に戻すことで、2/31のような不正日付を防ぐ
   const updateField = (key: keyof FormData, value: string) => {
     setFormData((prev) => ({
       ...prev,
@@ -116,6 +125,7 @@ export default function ProfileInputPage() {
   };
 
   return (
+    // 給付金判定の前段として、ユーザー属性を入力する画面
     <main className="min-h-screen bg-[linear-gradient(140deg,#fdf6ec_0%,#f8fbff_45%,#e9f6ef_100%)] px-4 py-8">
       <div className="mx-auto w-full max-w-3xl rounded-3xl border border-slate-200/70 bg-white/90 p-5 shadow-[0_10px_40px_-18px_rgba(10,40,20,0.28)] backdrop-blur md:p-8">
         <div className="mb-8 space-y-3">
@@ -127,6 +137,7 @@ export default function ProfileInputPage() {
           </h1>
         </div>
 
+        {/* 入力フォーム本体 */}
         <form className="grid grid-cols-1 gap-5 md:grid-cols-2">
           <Field label="名前" required>
             <input
@@ -281,8 +292,9 @@ export default function ProfileInputPage() {
 }
 
 const inputClass =
-  "w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 shadow-sm outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100 disabled:bg-slate-100";
+  "w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 shadow-sm outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100 disabled:bg-slate-100" as const;
 
+// ラベルと必須マークの表示を共通化する部品
 function Field({
   label,
   required,
