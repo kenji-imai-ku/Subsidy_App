@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useMemo, useState } from "react";
 
 // 都道府県用の固定値（日本の全47都道府県）
@@ -278,12 +279,12 @@ export default function ProfileInputPage() {
           </Field>
 
           <div className="pt-2 md:col-span-2">
-            <button
-              type="button"
-              className="w-full rounded-xl bg-emerald-600 px-5 py-3 font-semibold text-white transition hover:bg-emerald-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2"
+            <Link
+              href="/benefits"
+              className="inline-flex w-full items-center justify-center rounded-xl bg-emerald-600 px-5 py-3 font-semibold text-white transition hover:bg-emerald-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2"
             >
               入力内容を確認する
-            </button>
+            </Link>
           </div>
         </form>
       </div>
