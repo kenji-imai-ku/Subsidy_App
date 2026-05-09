@@ -859,3 +859,16 @@ DBではマッチングしやすい形にする。
 MVPでは、最新のプロフィール1件を使う。
 
 ただし、将来的に複数ユーザー対応する場合は、`user_id` や認証機能を追加する必要がある。
+
+---
+
+## 【追記】トラブルシューティング・実装時の注意点
+
+・事象：ドキュメントの「12. main.pyへのルーター登録」の手順のみだと、DBテーブル（user_profiles）が作成されず、API実行時に500エラー（Internal Server Error）が発生する。
+・解決策：app/main.py に以下のコードを追記し、起動時にテーブルを自動生成させる必要がある。
+
+```python
+from app.core.database import engine, Base
+Base.metadata.create_all(bind=engine)
+```
+
