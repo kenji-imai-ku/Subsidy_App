@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.core.database import engine, Base
-from app.routers import profiles, programs
+from app.routers import profiles, programs, matches
 import app.models  # テーブル定義を読み込ませるためにインポート
 
 # アプリ起動時にテーブルを作成する
@@ -21,6 +21,7 @@ app.add_middleware(
 # ルーターの登録
 app.include_router(profiles.router)
 app.include_router(programs.router)
+app.include_router(matches.router)
 
 
 @app.get("/")
