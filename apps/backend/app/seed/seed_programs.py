@@ -1,8 +1,12 @@
-from app.core.database import SessionLocal
+from app.core.database import SessionLocal, engine, Base
 from app.models.support_program import SupportProgram, SupportProgramCondition
+import app.models  # テーブル定義を読み込ませるためにインポート
 
 
 def seed_programs():
+    # テーブルが存在しない場合は作成する
+    Base.metadata.create_all(bind=engine)
+    
     db = SessionLocal()
 
     try:

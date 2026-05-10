@@ -1,6 +1,6 @@
 from datetime import date
-from pydantic import BaseModel
-from typing import Optional
+from pydantic import BaseModel, ConfigDict, field_validator, model_validator
+from typing import Optional, Any
 
 
 class ProgramConditionResponse(BaseModel):
@@ -14,8 +14,7 @@ class ProgramConditionResponse(BaseModel):
     required_gender: Optional[str] = None
     condition_description: Optional[str] = None
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class ProgramListItemResponse(BaseModel):
@@ -31,12 +30,52 @@ class ProgramListItemResponse(BaseModel):
     applicationUrl: Optional[str] = None
     deadline: Optional[date] = None
 
-    # SQLAlchemyのモデル属性名とPydanticのフィールド名が異なる場合の変換（エイリアス）
-    # ただし今回はシンプルにするため、一旦手動変換またはそのまま返す方針で行きます。
-    # RoleBのドキュメントに合わせたCamelCase形式のレスポンスを提供します。
+    model_config = ConfigDict(from_attributes=True)
+
+    @model_validator(mode='before')
+    @classmethod
+    def map_snake_to_camel(cls, data: Any) -> Any:
+        if hasattr(data, "target_prefecture"):
+            # SQLAlchemyモデルからの変換
+            return {
+                "id": data.id,
+                "title": data.title,
+                "provider": data.provider,
+                "summary": data.summary,
+                "benefit": data.benefit,
+                "category": data.category,
+                "targetPrefecture": data.target_prefecture,
+                "targetCity": data.target_city,
+                "targetWard": data.target_ward,
+                "applicationUrl": data.application_url,
+                "deadline": data.deadline,
+            }
+        return data
 
 
 class ProgramDetailResponse(ProgramListItemResponse):
     requiredDocuments: Optional[str] = None
     sourceUrl: Optional[str] = None
     condition: Optional[ProgramConditionResponse] = None
+
+    @model_validator(mode='before')
+    @classmethod
+    def map_snake_to_camel_detail(cls, data: Any) -> Any:
+        if hasattr(data, "target_prefecture"):
+            return {
+                "id": data.id,
+                "title": data.title,
+                "provider": data.provider,
+                "summary": data.summary,
+                "benefit": data.benefit,
+                "category": data.category,
+                "targetPrefecture": data.target_prefecture,
+                "targetCity": data.target_city,
+                "targetWard": data.target_ward,
+                "applicationUrl": data.application_url,
+                "deadline": data.deadline,
+                "requiredDocuments": data.required_documents,
+                "sourceUrl": data.source_url,
+                "condition": data.condition,
+            }
+        return data
