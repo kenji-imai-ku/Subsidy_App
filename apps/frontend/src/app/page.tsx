@@ -125,6 +125,18 @@ export default function ProfileInputPage() {
     }));
   };
 
+  // 一覧画面で現在の検索条件として表示するため、入力値をURLクエリに変換する。
+  const benefitsHref = useMemo(() => {
+    const params = new URLSearchParams();
+
+    Object.entries(formData).forEach(([key, value]) => {
+      if (value) params.set(key, value);
+    });
+
+    const query = params.toString();
+    return query ? `/benefits?${query}` : "/benefits";
+  }, [formData]);
+
   return (
     // 給付金判定の前段として、ユーザー属性を入力する画面
     <main className="min-h-screen bg-[linear-gradient(140deg,#fdf6ec_0%,#f8fbff_45%,#e9f6ef_100%)] px-4 py-8">
@@ -280,7 +292,7 @@ export default function ProfileInputPage() {
 
           <div className="pt-2 md:col-span-2">
             <Link
-              href="/benefits"
+              href={benefitsHref}
               className="inline-flex w-full items-center justify-center rounded-xl bg-emerald-600 px-5 py-3 font-semibold text-white transition hover:bg-emerald-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2"
             >
               入力内容を確認する
