@@ -2,8 +2,10 @@
 
 import Link from "next/link";
 import Image from "next/image";
-import { useSearchParams } from "next/navigation";
-import { Suspense, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+
+const DEFAULT_API_BASE_URL = "http://localhost:8000" as const;
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? DEFAULT_API_BASE_URL;
 
 type BenefitTone =
   | "child"
@@ -25,108 +27,48 @@ type Benefit = {
   target: string;
   flag: BenefitFlag;
   tone: BenefitTone;
+  provider: string;
+  score: number;
+  status: string;
+  reasons: readonly string[];
+  warnings: readonly string[];
 };
 
 type TabKey = "all" | "recommended" | "deadline";
 type SortKey = "recommended" | "deadline" | "amount";
-type ProfileSearchParams = {
+type ApiProfile = {
+  id: number;
+  name: string;
   prefecture: string;
-  birthYear: string;
-  birthMonth: string;
-  birthDay: string;
+  birthDate: string;
   householdIncome: string;
   familyType: string;
-  childrenCount: string;
+  childrenCount: number;
   gender: string;
   taxExempt: string;
 };
 
-// 画面確認用の給付金データ。後でAPI接続する場合も、この形を表示側の受け口にする。
-const benefits = [
-  {
-    id: "childcare-support",
-    name: "子育て世帯生活支援特別給付金",
-    amount: "100,000円",
-    deadline: "2024/12/31",
-    overview:
-      "低所得の子育て世帯を支援する給付金です。18歳未満の児童がいる世帯が対象です。",
-    category: "子育て世帯向け",
-    target: "子ども 1人",
-    flag: "おすすめ",
-    tone: "child",
-  },
-  {
-    id: "tax-exempt-household",
-    name: "住民税非課税世帯給付金",
-    amount: "70,000円",
-    deadline: "2024/06/30",
-    overview: "住民税非課税世帯を対象とした給付金です。",
-    category: "すべての世帯向け",
-    target: "世帯単位",
-    flag: "期限が近い",
-    tone: "tax",
-  },
-  {
-    id: "vocational-training",
-    name: "高等職業訓練促進給付金",
-    amount: "100,000円",
-    deadline: "2024/12/31",
-    overview:
-      "資格取得のために養成機関で修業する方を支援する給付金です。",
-    category: "ひとり親家庭向け",
-    target: "月額支給",
-    flag: "おすすめ",
-    tone: "work",
-  },
-  {
-    id: "housing-security",
-    name: "住居確保給付金",
-    amount: "53,700円",
-    deadline: "随時受付",
-    overview:
-      "離職や収入減少により住居を失うおそれがある方へ家賃相当額を支援します。",
-    category: "住まいの支援",
-    target: "原則 3か月",
-    flag: "確認が必要",
-    tone: "housing",
-  },
-  {
-    id: "medical-expense",
-    name: "ひとり親家庭等医療費助成",
-    amount: "医療費の一部",
-    deadline: "随時受付",
-    overview:
-      "ひとり親家庭などを対象に、医療機関でかかった費用の一部を助成します。",
-    category: "医療費助成",
-    target: "親子対象",
-    flag: "おすすめ",
-    tone: "medical",
-  },
-  {
-    id: "school-expense",
-    name: "就学援助制度",
-    amount: "学用品費など",
-    deadline: "2024/07/31",
-    overview:
-      "小中学校に通うお子さまの学用品費、給食費などを援助する制度です。",
-    category: "教育支援",
-    target: "小中学生",
-    flag: "期限が近い",
-    tone: "school",
-  },
-  {
-    id: "care-support",
-    name: "介護保険負担限度額認定",
-    amount: "食費・居住費を軽減",
-    deadline: "随時受付",
-    overview:
-      "介護保険施設などを利用する方の食費や居住費の負担を軽減します。",
-    category: "介護支援",
-    target: "介護利用者",
-    flag: "確認が必要",
-    tone: "care",
-  },
-] as const satisfies readonly Benefit[];
+type ApiProgram = {
+  id: number;
+  title: string;
+  provider: string;
+  summary: string;
+  benefit: string | null;
+  category: string | null;
+  targetPrefecture: string | null;
+  targetCity: string | null;
+  targetWard: string | null;
+  applicationUrl: string | null;
+  deadline: string | null;
+};
+
+type ApiMatch = {
+  program: ApiProgram;
+  score: number;
+  status: "eligible" | "possible" | string;
+  reasons: string[];
+  warnings: string[];
+};
 
 // タブの内部キーと画面表示名を分けて、絞り込み条件を扱いやすくする。
 const tabLabels = {
@@ -172,37 +114,61 @@ const iconPath = {
 } as const satisfies Record<BenefitTone, string>;
 
 export default function BenefitsPage() {
-  return (
-    <Suspense fallback={<BenefitsPageFallback />}>
-      <BenefitsPageContent />
-    </Suspense>
-  );
-}
-
-function BenefitsPageContent() {
-  const searchParams = useSearchParams();
   const [activeTab, setActiveTab] = useState<TabKey>("all");
   const [sortKey, setSortKey] = useState<SortKey>("recommended");
+  const [profile, setProfile] = useState<ApiProfile | null>(null);
+  const [matches, setMatches] = useState<ApiMatch[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
 
-  // プロフィール入力画面から渡されたURLクエリを、検索条件表示に使う値へ戻す。
-  const profileSearchParams = useMemo<ProfileSearchParams>(() => {
-    return {
-      prefecture: searchParams.get("prefecture") ?? "",
-      birthYear: searchParams.get("birthYear") ?? "",
-      birthMonth: searchParams.get("birthMonth") ?? "",
-      birthDay: searchParams.get("birthDay") ?? "",
-      householdIncome: searchParams.get("householdIncome") ?? "",
-      familyType: searchParams.get("familyType") ?? "",
-      childrenCount: searchParams.get("childrenCount") ?? "",
-      gender: searchParams.get("gender") ?? "",
-      taxExempt: searchParams.get("taxExempt") ?? "",
+  // 保存済みプロフィールと、それをもとにしたマッチング結果をバックエンドから取得する。
+  useEffect(() => {
+    const fetchResults = async () => {
+      setIsLoading(true);
+      setLoadError("");
+
+      try {
+        const [profileResponse, matchesResponse] = await Promise.all([
+          fetch(`${API_BASE_URL}/profile`),
+          fetch(`${API_BASE_URL}/matches`),
+        ]);
+
+        if (!profileResponse.ok) {
+          throw new Error("プロフィール情報を取得できませんでした");
+        }
+
+        if (!matchesResponse.ok) {
+          throw new Error("給付金のマッチング結果を取得できませんでした");
+        }
+
+        const profileData = (await profileResponse.json()) as ApiProfile;
+        const matchData = (await matchesResponse.json()) as ApiMatch[];
+
+        setProfile(profileData);
+        setMatches(matchData);
+      } catch (error) {
+        setLoadError(
+          error instanceof Error
+            ? error.message
+            : "バックエンドとの接続に失敗しました"
+        );
+      } finally {
+        setIsLoading(false);
+      }
     };
-  }, [searchParams]);
+
+    void fetchResults();
+  }, []);
 
   // 入力済みの項目だけを検索条件として表示し、未入力の項目は一覧から省く。
   const searchConditionLabels = useMemo(() => {
-    return buildSearchConditionLabels(profileSearchParams);
-  }, [profileSearchParams]);
+    return profile ? buildSearchConditionLabels(profile) : [];
+  }, [profile]);
+
+  // APIレスポンスを画面表示用のBenefit型へ変換し、UI側の責務を描画に絞る。
+  const benefits = useMemo(() => {
+    return matches.map(mapMatchToBenefit);
+  }, [matches]);
 
   // タブと並び替えは画面上だけの操作なので、元データを直接変更せず表示用配列を作る。
   const filteredBenefits = useMemo(() => {
@@ -217,7 +183,11 @@ function BenefitsPageContent() {
       if (sortKey === "deadline") return getDeadlineValue(a.deadline) - getDeadlineValue(b.deadline);
       return getPriorityValue(a.flag) - getPriorityValue(b.flag);
     });
-  }, [activeTab, sortKey]);
+  }, [activeTab, benefits, sortKey]);
+
+  if (isLoading) {
+    return <BenefitsPageFallback />;
+  }
 
   return (
     <main className="min-h-screen bg-[linear-gradient(150deg,#f8fffc_0%,#f7fbff_48%,#f1f8f4_100%)] text-slate-950">
@@ -255,6 +225,12 @@ function BenefitsPageContent() {
             </div>
           </div>
         </section>
+
+        {loadError ? (
+          <section className="mt-5 rounded-[8px] border border-rose-200 bg-rose-50 px-5 py-4 text-sm font-semibold text-rose-700">
+            {loadError}
+          </section>
+        ) : null}
 
         {/* 入力済み条件を一覧直前に置き、条件変更へ戻れる導線をまとめる。 */}
         <section className="mt-5 rounded-[8px] border border-slate-200 bg-white px-5 py-4 shadow-[0_10px_28px_-24px_rgba(15,23,42,0.55)]">
@@ -299,7 +275,7 @@ function BenefitsPageContent() {
                     : "border-transparent text-slate-600 hover:text-slate-950"
                 }`}
               >
-                {tabLabels[tab]}（{getTabCount(tab)}件）
+                {tabLabels[tab]}（{getTabCount(tab, benefits)}件）
               </button>
             ))}
           </div>
@@ -319,9 +295,15 @@ function BenefitsPageContent() {
         </div>
 
         <section className="mt-4 space-y-4" aria-label="給付金一覧">
-          {filteredBenefits.map((benefit) => (
-            <BenefitCard key={benefit.id} benefit={benefit} />
-          ))}
+          {filteredBenefits.length > 0 ? (
+            filteredBenefits.map((benefit) => (
+              <BenefitCard key={benefit.id} benefit={benefit} />
+            ))
+          ) : (
+            <div className="rounded-[8px] border border-slate-200 bg-white px-5 py-8 text-center text-sm font-semibold text-slate-600">
+              条件に合う給付金はまだ見つかっていません。
+            </div>
+          )}
         </section>
 
         <button
@@ -420,9 +402,17 @@ function BenefitCard({ benefit }: { benefit: Benefit }) {
             {benefit.name}
           </h2>
           <p className="mt-2 text-xs font-bold text-slate-500">
-            対象: {benefit.target}
+            {benefit.provider} / 対象: {benefit.target}
           </p>
           <p className="mt-2 text-sm leading-6 text-slate-600">{benefit.overview}</p>
+          <p className="mt-2 text-sm font-bold text-emerald-700">
+            マッチ度 {benefit.score}点
+          </p>
+          {benefit.warnings.length > 0 ? (
+            <p className="mt-2 text-xs font-semibold leading-5 text-amber-700">
+              確認事項: {benefit.warnings.join(" / ")}
+            </p>
+          ) : null}
           <button
             type="button"
             className="mt-2 text-sm font-bold text-sky-600 hover:text-sky-700"
@@ -506,7 +496,7 @@ function Icon({ path, className }: { path: string; className?: string }) {
   );
 }
 
-function getTabCount(tab: TabKey) {
+function getTabCount(tab: TabKey, benefits: readonly Benefit[]) {
   if (tab === "recommended") return benefits.filter((benefit) => benefit.flag === "おすすめ").length;
   if (tab === "deadline") return benefits.filter((benefit) => benefit.flag === "期限が近い").length;
   return benefits.length;
@@ -518,13 +508,13 @@ function getPriorityValue(flag: BenefitFlag) {
   return 2;
 }
 
-function buildSearchConditionLabels(profile: ProfileSearchParams) {
+function buildSearchConditionLabels(profile: ApiProfile) {
   const labels = [
     profile.prefecture,
     getBirthConditionLabel(profile),
     profile.householdIncome ? `世帯年収 ${profile.householdIncome}` : "",
     profile.familyType,
-    profile.childrenCount ? `子ども ${profile.childrenCount}人` : "",
+    `子ども ${profile.childrenCount}人`,
     profile.gender ? `性別 ${profile.gender}` : "",
     profile.taxExempt ? `非課税世帯 ${profile.taxExempt}` : "",
   ] as const;
@@ -532,26 +522,77 @@ function buildSearchConditionLabels(profile: ProfileSearchParams) {
   return labels.filter((label) => label.length > 0);
 }
 
-function getBirthConditionLabel(profile: ProfileSearchParams) {
-  const { birthYear, birthMonth, birthDay } = profile;
-  if (!birthYear || !birthMonth || !birthDay) return "";
+function getBirthConditionLabel(profile: ApiProfile) {
+  if (!profile.birthDate) return "";
 
-  const birthDate = new Date(
-    Number(birthYear),
-    Number(birthMonth) - 1,
-    Number(birthDay)
-  );
+  const birthDate = new Date(profile.birthDate);
 
   if (Number.isNaN(birthDate.getTime())) return "";
 
   const age = getAge(birthDate);
-  const formattedDate = [
-    birthYear,
-    birthMonth.padStart(2, "0"),
-    birthDay.padStart(2, "0"),
-  ].join("/");
+  const formattedDate = profile.birthDate.replaceAll("-", "/");
 
   return `${age}歳（${formattedDate}生）`;
+}
+
+function mapMatchToBenefit(match: ApiMatch): Benefit {
+  const { program } = match;
+  const flag = getBenefitFlag(match);
+
+  return {
+    id: String(program.id),
+    name: program.title,
+    amount: program.benefit ?? "公式情報を確認",
+    deadline: program.deadline ? program.deadline.replaceAll("-", "/") : "随時受付",
+    overview: program.summary,
+    category: getCategoryLabel(program.category),
+    target: getTargetLabel(program),
+    flag,
+    tone: getBenefitTone(program.category),
+    provider: program.provider,
+    score: match.score,
+    status: match.status,
+    reasons: match.reasons,
+    warnings: match.warnings,
+  };
+}
+
+function getBenefitFlag(match: ApiMatch): BenefitFlag {
+  if (match.warnings.length > 0 || match.status === "possible") return "確認が必要";
+  if (match.score >= 90) return "おすすめ";
+  return "おすすめ";
+}
+
+function getCategoryLabel(category: string | null) {
+  const categoryLabels: Record<string, string> = {
+    housing: "住まいの支援",
+    childcare: "子育て世帯向け",
+    low_income: "低所得世帯向け",
+  } as const;
+
+  if (!category) return "支援制度";
+  return categoryLabels[category] ?? category;
+}
+
+function getBenefitTone(category: string | null): BenefitTone {
+  const categoryTones: Record<string, BenefitTone> = {
+    housing: "housing",
+    childcare: "child",
+    low_income: "tax",
+  } as const;
+
+  if (!category) return "work";
+  return categoryTones[category] ?? "work";
+}
+
+function getTargetLabel(program: ApiProgram) {
+  const targets = [
+    program.targetPrefecture,
+    program.targetCity,
+    program.targetWard,
+  ].filter((target): target is string => Boolean(target));
+
+  return targets.length > 0 ? targets.join(" ") : "全国または条件指定なし";
 }
 
 function getAge(birthDate: Date) {

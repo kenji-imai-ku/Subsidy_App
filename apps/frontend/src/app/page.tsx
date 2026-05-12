@@ -1,7 +1,12 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
+import type { FormEvent } from "react";
 import { useMemo, useState } from "react";
+
+const DEFAULT_API_BASE_URL = "http://localhost:8000" as const;
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? DEFAULT_API_BASE_URL;
 
 // 都道府県用の固定値（日本の全47都道府県）
 const PREFECTURES = [
@@ -89,6 +94,7 @@ const years = Array.from({ length: 101 }, (_, i) => String(currentYear - i));
 const months = Array.from({ length: 12 }, (_, i) => String(i + 1));
 
 export default function ProfileInputPage() {
+  const router = useRouter();
   // 画面内の入力値を1つのstateで管理
   const [formData, setFormData] = useState<FormData>({
     name: "",
@@ -102,6 +108,8 @@ export default function ProfileInputPage() {
     gender: "",
     taxExempt: "",
   });
+  const [submitError, setSubmitError] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   // 選択済みの年・月から日数を計算
   const days = useMemo(() => {
@@ -125,17 +133,42 @@ export default function ProfileInputPage() {
     }));
   };
 
-  // 一覧画面で現在の検索条件として表示するため、入力値をURLクエリに変換する。
-  const benefitsHref = useMemo(() => {
-    const params = new URLSearchParams();
+  // バックエンドにプロフィールを保存してから、マッチング結果画面へ遷移する。
+  const submitProfile = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setSubmitError("");
+    setIsSubmitting(true);
 
-    Object.entries(formData).forEach(([key, value]) => {
-      if (value) params.set(key, value);
-    });
+    try {
+      const response = await fetch(`${API_BASE_URL}/profile`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          ...formData,
+          childrenCount: formData.childrenCount || "0",
+        }),
+      });
 
-    const query = params.toString();
-    return query ? `/benefits?${query}` : "/benefits";
-  }, [formData]);
+      if (!response.ok) {
+        const errorBody = (await response.json().catch(() => null)) as {
+          detail?: string;
+        } | null;
+        throw new Error(errorBody?.detail ?? "プロフィールを保存できませんでした");
+      }
+
+      router.push("/benefits");
+    } catch (error) {
+      setSubmitError(
+        error instanceof Error
+          ? error.message
+          : "プロフィールを保存できませんでした"
+      );
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
 
   return (
     // 給付金判定の前段として、ユーザー属性を入力する画面
@@ -152,7 +185,10 @@ export default function ProfileInputPage() {
           </p>
         </section>
 
-        <form className="mx-auto mt-8 w-full max-w-5xl rounded-[8px] border border-slate-200 bg-white p-5 shadow-[0_18px_50px_-34px_rgba(15,23,42,0.45)] sm:p-7 lg:p-9">
+        <form
+          className="mx-auto mt-8 w-full max-w-5xl rounded-[8px] border border-slate-200 bg-white p-5 shadow-[0_18px_50px_-34px_rgba(15,23,42,0.45)] sm:p-7 lg:p-9"
+          onSubmit={submitProfile}
+        >
           <section>
             <h2 className="text-xl font-bold text-emerald-700">基本情報</h2>
 
@@ -172,6 +208,7 @@ export default function ProfileInputPage() {
                   value={formData.gender}
                   onChange={(e) => updateField("gender", e.target.value)}
                   className={inputClass}
+                  required
                 >
                   <option value="">選択してください</option>
                   {GENDER_OPTIONS.map((gender) => (
@@ -188,6 +225,7 @@ export default function ProfileInputPage() {
                     value={formData.birthYear}
                     onChange={(e) => updateField("birthYear", e.target.value)}
                     className={inputClass}
+                    required
                   >
                     <option value="">年</option>
                     {years.map((year) => (
@@ -200,6 +238,7 @@ export default function ProfileInputPage() {
                     value={formData.birthMonth}
                     onChange={(e) => updateField("birthMonth", e.target.value)}
                     className={inputClass}
+                    required
                   >
                     <option value="">月</option>
                     {months.map((month) => (
@@ -213,6 +252,7 @@ export default function ProfileInputPage() {
                     onChange={(e) => updateField("birthDay", e.target.value)}
                     className={inputClass}
                     disabled={days.length === 0}
+                    required
                   >
                     <option value="">日</option>
                     {days.map((day) => (
@@ -229,6 +269,7 @@ export default function ProfileInputPage() {
                   value={formData.prefecture}
                   onChange={(e) => updateField("prefecture", e.target.value)}
                   className={inputClass}
+                  required
                 >
                   <option value="">選択してください</option>
                   {PREFECTURES.map((prefecture) => (
@@ -272,6 +313,7 @@ export default function ProfileInputPage() {
                     updateField("householdIncome", e.target.value)
                   }
                   className={inputClass}
+                  required
                 >
                   <option value="">選択してください</option>
                   {INCOME_OPTIONS.map((income) => (
@@ -287,6 +329,7 @@ export default function ProfileInputPage() {
                   value={formData.taxExempt}
                   onChange={(e) => updateField("taxExempt", e.target.value)}
                   className={inputClass}
+                  required
                 >
                   <option value="">選択してください</option>
                   {TAX_EXEMPT_OPTIONS.map((option) => (
@@ -299,14 +342,21 @@ export default function ProfileInputPage() {
             </div>
           </section>
 
+          {submitError ? (
+            <p className="mt-6 rounded-[6px] border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-semibold text-rose-700">
+              {submitError}
+            </p>
+          ) : null}
+
           <div className="mt-8">
-            <Link
-              href={benefitsHref}
-              className="inline-flex h-14 w-full items-center justify-center gap-3 rounded-[6px] bg-emerald-700 px-5 text-base font-bold text-white shadow-[0_12px_24px_-16px_rgba(4,120,87,0.75)] transition hover:bg-emerald-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-600 focus-visible:ring-offset-2"
+            <button
+              type="submit"
+              disabled={isSubmitting}
+              className="inline-flex h-14 w-full items-center justify-center gap-3 rounded-[6px] bg-emerald-700 px-5 text-base font-bold text-white shadow-[0_12px_24px_-16px_rgba(4,120,87,0.75)] transition hover:bg-emerald-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-600 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:bg-slate-400"
             >
-              入力内容を確認する
+              {isSubmitting ? "保存しています" : "入力内容を確認する"}
               <span aria-hidden="true">›</span>
-            </Link>
+            </button>
           </div>
         </form>
 
