@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { FormEvent } from "react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 const DEFAULT_API_BASE_URL = "http://localhost:8000" as const;
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? DEFAULT_API_BASE_URL;
@@ -88,28 +88,67 @@ type FormData = {
   taxExempt: string;
 };
 
+type ApiProfile = {
+  name: string;
+  prefecture: string;
+  birthDate: string;
+  householdIncome: string;
+  familyType: string;
+  childrenCount: number;
+  gender: string;
+  taxExempt: string;
+};
+
 const currentYear = new Date().getFullYear();
 // 生年月日の年/月プルダウンを生成
 const years = Array.from({ length: 101 }, (_, i) => String(currentYear - i));
 const months = Array.from({ length: 12 }, (_, i) => String(i + 1));
 
+const emptyFormData = {
+  name: "",
+  prefecture: "",
+  birthYear: "",
+  birthMonth: "",
+  birthDay: "",
+  householdIncome: "",
+  familyType: "",
+  childrenCount: "",
+  gender: "",
+  taxExempt: "",
+} as const satisfies FormData;
+
 export default function ProfileInputPage() {
   const router = useRouter();
   // 画面内の入力値を1つのstateで管理
-  const [formData, setFormData] = useState<FormData>({
-    name: "",
-    prefecture: "",
-    birthYear: "",
-    birthMonth: "",
-    birthDay: "",
-    householdIncome: "",
-    familyType: "",
-    childrenCount: "",
-    gender: "",
-    taxExempt: "",
-  });
+  const [formData, setFormData] = useState<FormData>(emptyFormData);
   const [submitError, setSubmitError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // 条件変更で戻ってきたとき、保存済みプロフィールをフォームに復元する。
+  useEffect(() => {
+    const fetchProfile = async () => {
+      try {
+        const response = await fetch(`${API_BASE_URL}/profile`);
+
+        if (response.status === 404) return;
+
+        if (!response.ok) {
+          throw new Error("保存済みプロフィールを取得できませんでした");
+        }
+
+        const profile = (await response.json()) as ApiProfile;
+        setFormData(mapProfileToFormData(profile));
+      } catch (error) {
+        setSubmitError(
+          error instanceof Error
+            ? error.message
+            : "保存済みプロフィールを取得できませんでした"
+        );
+      }
+    };
+
+    void fetchProfile();
+  }, []);
 
   // 選択済みの年・月から日数を計算
   const days = useMemo(() => {
@@ -440,6 +479,24 @@ function SegmentedFamily({
       ))}
     </div>
   );
+}
+
+function mapProfileToFormData(profile: ApiProfile): FormData {
+  const [birthYear = "", birthMonth = "", birthDay = ""] =
+    profile.birthDate.split("-");
+
+  return {
+    name: profile.name,
+    prefecture: profile.prefecture,
+    birthYear,
+    birthMonth: birthMonth.replace(/^0/, ""),
+    birthDay: birthDay.replace(/^0/, ""),
+    householdIncome: profile.householdIncome,
+    familyType: profile.familyType,
+    childrenCount: String(profile.childrenCount),
+    gender: profile.gender,
+    taxExempt: profile.taxExempt,
+  };
 }
 
 // ラベルと必須マークの表示を共通化する部品

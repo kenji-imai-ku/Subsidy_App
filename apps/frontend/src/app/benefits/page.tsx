@@ -120,6 +120,7 @@ export default function BenefitsPage() {
   const [matches, setMatches] = useState<ApiMatch[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
+  const [selectedBenefit, setSelectedBenefit] = useState<Benefit | null>(null);
 
   // 保存済みプロフィールと、それをもとにしたマッチング結果をバックエンドから取得する。
   useEffect(() => {
@@ -297,7 +298,11 @@ export default function BenefitsPage() {
         <section className="mt-4 space-y-4" aria-label="給付金一覧">
           {filteredBenefits.length > 0 ? (
             filteredBenefits.map((benefit) => (
-              <BenefitCard key={benefit.id} benefit={benefit} />
+              <BenefitCard
+                key={benefit.id}
+                benefit={benefit}
+                onOpenDetail={setSelectedBenefit}
+              />
             ))
           ) : (
             <div className="rounded-[8px] border border-slate-200 bg-white px-5 py-8 text-center text-sm font-semibold text-slate-600">
@@ -317,6 +322,13 @@ export default function BenefitsPage() {
           この結果は、入力いただいた情報に基づく目安です。実際の受給可否は各制度の条件や審査により決定されます。
         </p>
       </div>
+
+      {selectedBenefit ? (
+        <BenefitDetailModal
+          benefit={selectedBenefit}
+          onClose={() => setSelectedBenefit(null)}
+        />
+      ) : null}
     </main>
   );
 }
@@ -378,7 +390,13 @@ function BenefitsPageFallback() {
   );
 }
 
-function BenefitCard({ benefit }: { benefit: Benefit }) {
+function BenefitCard({
+  benefit,
+  onOpenDetail,
+}: {
+  benefit: Benefit;
+  onOpenDetail: (benefit: Benefit) => void;
+}) {
   return (
     // 画像の右側画面に合わせ、制度名・金額・期限・操作を横並びで比較できる形にする。
     <article className="overflow-hidden rounded-[8px] border border-slate-200 bg-white shadow-[0_12px_32px_-26px_rgba(15,23,42,0.5)]">
@@ -413,12 +431,6 @@ function BenefitCard({ benefit }: { benefit: Benefit }) {
               確認事項: {benefit.warnings.join(" / ")}
             </p>
           ) : null}
-          <button
-            type="button"
-            className="mt-2 text-sm font-bold text-sky-600 hover:text-sky-700"
-          >
-            詳しく見る
-          </button>
         </div>
 
         <Metric label="もらえる金額" value={benefit.amount} tone="amount" />
@@ -434,6 +446,7 @@ function BenefitCard({ benefit }: { benefit: Benefit }) {
           </button>
           <button
             type="button"
+            onClick={() => onOpenDetail(benefit)}
             className="inline-flex h-11 items-center justify-center gap-2 rounded-[6px] bg-emerald-700 px-3 text-sm font-bold text-white transition hover:bg-emerald-800"
           >
             詳細を見る
@@ -442,6 +455,132 @@ function BenefitCard({ benefit }: { benefit: Benefit }) {
         </div>
       </div>
     </article>
+  );
+}
+
+function BenefitDetailModal({
+  benefit,
+  onClose,
+}: {
+  benefit: Benefit;
+  onClose: () => void;
+}) {
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 px-4 py-6"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="benefit-detail-title"
+    >
+      <div className="max-h-[calc(100vh-48px)] w-full max-w-2xl overflow-y-auto rounded-[8px] bg-white shadow-[0_24px_80px_-28px_rgba(15,23,42,0.65)]">
+        <div className="flex items-start justify-between gap-4 border-b border-slate-200 px-5 py-4 sm:px-6">
+          <div>
+            <div className="flex flex-wrap items-center gap-2">
+              <span className={`rounded-[4px] px-2 py-1 text-xs font-bold ${flagClass[benefit.flag]}`}>
+                {benefit.flag}
+              </span>
+              <span className="rounded-[4px] bg-emerald-50 px-2 py-1 text-xs font-bold text-emerald-700">
+                {benefit.category}
+              </span>
+            </div>
+            <h2
+              id="benefit-detail-title"
+              className="mt-3 text-xl font-bold leading-snug text-slate-950"
+            >
+              {benefit.name}
+            </h2>
+            <p className="mt-2 text-sm font-semibold text-slate-500">
+              {benefit.provider}
+            </p>
+          </div>
+
+          <button
+            type="button"
+            onClick={onClose}
+            className="grid h-9 w-9 shrink-0 place-items-center rounded-[6px] border border-slate-200 text-slate-600 transition hover:bg-slate-50 hover:text-slate-950"
+            aria-label="詳細を閉じる"
+          >
+            <Icon path="M6 6l12 12M18 6 6 18" className="h-5 w-5" />
+          </button>
+        </div>
+
+        <div className="space-y-5 px-5 py-5 sm:px-6">
+          <div className="grid gap-3 sm:grid-cols-3">
+            <DetailMetric label="マッチ度" value={`${benefit.score}点`} />
+            <DetailMetric label="もらえる金額" value={benefit.amount} />
+            <DetailMetric label="申請期限" value={benefit.deadline} />
+          </div>
+
+          <section>
+            <h3 className="text-sm font-bold text-slate-900">概要</h3>
+            <p className="mt-2 text-sm leading-6 text-slate-700">
+              {benefit.overview}
+            </p>
+          </section>
+
+          <section>
+            <h3 className="text-sm font-bold text-slate-900">対象</h3>
+            <p className="mt-2 text-sm leading-6 text-slate-700">
+              {benefit.target}
+            </p>
+          </section>
+
+          <DetailList title="マッチした理由" items={benefit.reasons} />
+          <DetailList title="確認が必要な項目" items={benefit.warnings} />
+        </div>
+
+        <div className="flex flex-col-reverse gap-3 border-t border-slate-200 px-5 py-4 sm:flex-row sm:justify-end sm:px-6">
+          <button
+            type="button"
+            onClick={onClose}
+            className="inline-flex h-11 items-center justify-center rounded-[6px] border border-slate-200 bg-white px-5 text-sm font-bold text-slate-700 transition hover:bg-slate-50"
+          >
+            閉じる
+          </button>
+          <button
+            type="button"
+            className="inline-flex h-11 items-center justify-center rounded-[6px] bg-emerald-700 px-5 text-sm font-bold text-white transition hover:bg-emerald-800"
+          >
+            申請する
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function DetailMetric({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-[6px] border border-slate-200 bg-slate-50 px-4 py-3">
+      <p className="text-xs font-bold text-slate-500">{label}</p>
+      <p className="mt-1 text-base font-bold text-slate-950">{value}</p>
+    </div>
+  );
+}
+
+function DetailList({
+  title,
+  items,
+}: {
+  title: string;
+  items: readonly string[];
+}) {
+  return (
+    <section>
+      <h3 className="text-sm font-bold text-slate-900">{title}</h3>
+      {items.length > 0 ? (
+        <ul className="mt-2 space-y-2 text-sm leading-6 text-slate-700">
+          {items.map((item) => (
+            <li key={item} className="flex gap-2">
+              <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-emerald-600" />
+              <span>{item}</span>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="mt-2 text-sm leading-6 text-slate-500">なし</p>
+      )}
+    </section>
   );
 }
 
