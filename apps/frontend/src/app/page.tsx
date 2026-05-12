@@ -341,7 +341,7 @@ function SiteHeader() {
             </svg>
           </div>
           <div>
-            <p className="text-lg font-bold leading-none">給付金サポート</p>
+            <p className="text-lg font-bold leading-none">俺たちの血肉</p>
             <p className="mt-1 text-xs font-semibold text-slate-500">
               あなたに合った給付金を、かんたん検索
             </p>
