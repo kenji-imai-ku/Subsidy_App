@@ -1,6 +1,6 @@
 {
   "name": "backend",
   "scripts": {
-    "dev": "poetry run uvicorn main:app --reload --port 8000"
+    "dev": "poetry run uvicorn app.main:app --reload --port 8000"
   }
 }
