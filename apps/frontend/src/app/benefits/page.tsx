@@ -23,7 +23,6 @@ type Benefit = {
   amount: string;
   deadline: string;
   overview: string;
-  category: string;
   target: string;
   flag: BenefitFlag;
   tone: BenefitTone;
@@ -412,9 +411,6 @@ function BenefitCard({
             <span className={`rounded-[4px] px-2 py-1 text-xs font-bold ${flagClass[benefit.flag]}`}>
               {benefit.flag}
             </span>
-            <span className="rounded-[4px] bg-emerald-50 px-2 py-1 text-xs font-bold text-emerald-700">
-              {benefit.category}
-            </span>
           </div>
           <h2 className="mt-3 text-lg font-bold leading-snug text-slate-950">
             {benefit.name}
@@ -478,9 +474,6 @@ function BenefitDetailModal({
             <div className="flex flex-wrap items-center gap-2">
               <span className={`rounded-[4px] px-2 py-1 text-xs font-bold ${flagClass[benefit.flag]}`}>
                 {benefit.flag}
-              </span>
-              <span className="rounded-[4px] bg-emerald-50 px-2 py-1 text-xs font-bold text-emerald-700">
-                {benefit.category}
               </span>
             </div>
             <h2
@@ -684,7 +677,6 @@ function mapMatchToBenefit(match: ApiMatch): Benefit {
     amount: program.benefit ?? "公式情報を確認",
     deadline: program.deadline ? program.deadline.replaceAll("-", "/") : "随時受付",
     overview: program.summary,
-    category: getCategoryLabel(program.category),
     target: getTargetLabel(program),
     flag,
     tone: getBenefitTone(program.category),
@@ -700,17 +692,6 @@ function getBenefitFlag(match: ApiMatch): BenefitFlag {
   if (match.warnings.length > 0 || match.status === "possible") return "確認が必要";
   if (match.score >= 90) return "おすすめ";
   return "おすすめ";
-}
-
-function getCategoryLabel(category: string | null) {
-  const categoryLabels: Record<string, string> = {
-    housing: "住まいの支援",
-    childcare: "子育て世帯向け",
-    low_income: "低所得世帯向け",
-  } as const;
-
-  if (!category) return "支援制度";
-  return categoryLabels[category] ?? category;
 }
 
 function getBenefitTone(category: string | null): BenefitTone {
