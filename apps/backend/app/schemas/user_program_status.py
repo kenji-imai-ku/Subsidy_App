@@ -1,5 +1,5 @@
 from datetime import datetime
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 from typing import Optional
 
 
@@ -10,13 +10,11 @@ class UserProgramStatusRequest(BaseModel):
 
 
 class UserProgramStatusResponse(BaseModel):
-    programId: int = Field(..., alias="programId")
+    programId: int = Field(..., validation_alias="program_id", serialization_alias="programId")
     status: Optional[str] = None
-    isFavorite: bool = Field(..., alias="isFavorite")
+    isFavorite: bool = Field(..., validation_alias="is_favorite", serialization_alias="isFavorite")
     memo: Optional[str] = None
-    lastViewedAt: Optional[datetime] = Field(None, alias="lastViewedAt")
-    updatedAt: Optional[datetime] = Field(None, alias="updatedAt")
+    lastViewedAt: Optional[datetime] = Field(None, validation_alias="last_viewed_at", serialization_alias="lastViewedAt")
+    updatedAt: Optional[datetime] = Field(None, validation_alias="updated_at", serialization_alias="updatedAt")
 
-    class Config:
-        from_attributes = True
-        populate_by_name = True
+    model_config = ConfigDict(from_attributes=True, populate_by_name=True)
