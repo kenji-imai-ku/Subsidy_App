@@ -69,6 +69,68 @@ def get_program_by_id(db: Session, program_id: int):
     )
 
 
+def create_program(db: Session, program_data: dict, condition_data: dict | None = None, sources_data: list[dict] | None = None):
+    from app.models.support_program import SupportProgramCondition
+    from app.models.program_source import ProgramSource
+
+    db_program = SupportProgram(**program_data)
+    
+    if condition_data:
+        db_program.condition = SupportProgramCondition(**condition_data)
+        
+    if sources_data:
+        for source in sources_data:
+            db_program.sources.append(ProgramSource(**source))
+            
+    db.add(db_program)
+    db.commit()
+    db.refresh(db_program)
+    return db_program
+
+
+def update_program(
+    db: Session,
+    program_id: int,
+    program_data: dict,
+    condition_data: dict | None = None,
+    sources_data: list[dict] | None = None,
+):
+    from app.models.support_program import SupportProgramCondition
+    from app.models.program_source import ProgramSource
+
+    db_program = (
+        db.query(SupportProgram)
+        .options(joinedload(SupportProgram.condition), joinedload(SupportProgram.sources))
+        .filter(SupportProgram.id == program_id)
+        .first()
+    )
+    
+    if not db_program:
+        return None
+
+    # Update Program本体
+    for key, value in program_data.items():
+        setattr(db_program, key, value)
+
+    # Update Condition
+    if condition_data:
+        if db_program.condition:
+            for key, value in condition_data.items():
+                setattr(db_program.condition, key, value)
+        else:
+            db_program.condition = SupportProgramCondition(**condition_data)
+
+    # Update Sources (For simplicity in dev API, we replace all sources if provided)
+    if sources_data is not None:
+        db.query(ProgramSource).filter(ProgramSource.program_id == program_id).delete()
+        for source in sources_data:
+            db_program.sources.append(ProgramSource(**source))
+
+    db.commit()
+    db.refresh(db_program)
+    return db_program
+
+
 def list_programs_with_conditions(db: Session):
     return (
         db.query(SupportProgram)

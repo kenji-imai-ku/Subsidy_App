@@ -43,6 +43,95 @@ class ProgramConditionResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True, populate_by_name=True)
 
 
+class ProgramConditionCreateRequest(BaseModel):
+    minAge: Optional[int] = None
+    maxAge: Optional[int] = None
+    maxAnnualIncome: Optional[int] = None
+    maxMonthlyIncome: Optional[int] = None
+    maxSavingsAmount: Optional[int] = None
+    requiresTaxExempt: Optional[bool] = None
+    requiresChildren: Optional[bool] = None
+    minChildrenCount: Optional[int] = None
+    requiresSingleParent: Optional[bool] = None
+    requiredGender: Optional[str] = None
+    requiredCity: Optional[str] = None
+    requiredWard: Optional[str] = None
+    requiresUnemployed: Optional[bool] = None
+    unemployedWithinMonths: Optional[int] = None
+    requiresJobSeeking: Optional[bool] = None
+    requiresIncomeDecreased: Optional[bool] = None
+    requiresHealthInsurance: Optional[bool] = None
+    requiresPregnancy: Optional[bool] = None
+    maxPostpartumMonths: Optional[int] = None
+    requiresDisability: Optional[bool] = None
+    requiredDisabilityType: Optional[str] = None
+    requiresMedicalCareChild: Optional[bool] = None
+    requiresYoungCarer: Optional[bool] = None
+    requiresHouseholdHead: Optional[bool] = None
+    requiresRent: Optional[bool] = None
+    conditionDescription: Optional[str] = None
+    conditionTextOriginal: Optional[str] = None
+    manualCheckRequired: bool = False
+
+
+class ProgramSourceCreateRequest(BaseModel):
+    sourceUrl: str
+    sourceType: str
+    title: Optional[str] = None
+    publisher: Optional[str] = None
+    publishedAt: Optional[date] = None
+    lastModifiedAt: Optional[date] = None
+    notes: Optional[str] = None
+
+
+class ProgramCreateRequest(BaseModel):
+    title: str
+    provider: str
+    summary: str
+    benefit: Optional[str] = None
+    category: Optional[str] = None
+    supportType: Optional[str] = None
+    benefitAmountType: Optional[str] = None
+    benefitAmount: Optional[int] = None
+    benefitUnit: Optional[str] = None
+    targetPrefecture: Optional[str] = None
+    targetCity: Optional[str] = None
+    targetWard: Optional[str] = None
+    applicationRequired: Optional[bool] = None
+    applicationMethod: Optional[str] = None
+    applicationPeriodType: Optional[str] = None
+    applicationUrl: Optional[str] = None
+    deadline: Optional[date] = None
+    confidenceLevel: Optional[str] = None
+    isActive: bool = True
+    condition: Optional[ProgramConditionCreateRequest] = None
+    sources: List[ProgramSourceCreateRequest] = []
+
+
+class ProgramUpdateRequest(BaseModel):
+    title: Optional[str] = None
+    provider: Optional[str] = None
+    summary: Optional[str] = None
+    benefit: Optional[str] = None
+    category: Optional[str] = None
+    supportType: Optional[str] = None
+    benefitAmountType: Optional[str] = None
+    benefitAmount: Optional[int] = None
+    benefitUnit: Optional[str] = None
+    targetPrefecture: Optional[str] = None
+    targetCity: Optional[str] = None
+    targetWard: Optional[str] = None
+    applicationRequired: Optional[bool] = None
+    applicationMethod: Optional[str] = None
+    applicationPeriodType: Optional[str] = None
+    applicationUrl: Optional[str] = None
+    deadline: Optional[date] = None
+    confidenceLevel: Optional[str] = None
+    isActive: Optional[bool] = None
+    condition: Optional[ProgramConditionCreateRequest] = None
+    sources: Optional[List[ProgramSourceCreateRequest]] = None
+
+
 class ProgramSourceResponse(BaseModel):
     id: int
     sourceUrl: str = Field(..., validation_alias=AliasChoices("source_url", "sourceUrl"))
