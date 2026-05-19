@@ -3,6 +3,7 @@
 import Link from "next/link";
 import Image from "next/image";
 import { useEffect, useMemo, useState } from "react";
+import { AppHeader } from "@/components/AppHeader";
 
 const DEFAULT_API_BASE_URL = "http://localhost:8000" as const;
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? DEFAULT_API_BASE_URL;
@@ -16,6 +17,7 @@ type BenefitTone =
   | "school"
   | "care";
 type BenefitFlag = "おすすめ" | "期限が近い" | "確認が必要";
+type MatchStatus = "eligible" | "possible" | string;
 
 type Benefit = {
   id: string;
@@ -28,7 +30,12 @@ type Benefit = {
   tone: BenefitTone;
   provider: string;
   score: number;
-  status: string;
+  status: MatchStatus;
+  statusLabel: string;
+  supportType: string;
+  applicationMethod: string;
+  applicationUrl: string | null;
+  confidenceLabel: string;
   reasons: readonly string[];
   warnings: readonly string[];
 };
@@ -39,12 +46,22 @@ type ApiProfile = {
   id: number;
   name: string;
   prefecture: string;
+  city: string | null;
+  ward: string | null;
   birthDate: string;
   householdIncome: string;
+  annualIncomeMax: number | null;
+  monthlyIncome: number | null;
+  savingsAmountRange: string | null;
+  housingStatus: string | null;
   familyType: string;
+  hasSpouse: boolean | null;
   childrenCount: number;
+  hasChildren: boolean;
+  isSingleParent: boolean | null;
   gender: string;
-  taxExempt: string;
+  isTaxExemptHousehold: boolean | null;
+  isHouseholdHead: boolean | null;
 };
 
 type ApiProgram = {
@@ -54,17 +71,25 @@ type ApiProgram = {
   summary: string;
   benefit: string | null;
   category: string | null;
+  supportType: string | null;
+  benefitAmountType: string | null;
+  benefitAmount: number | null;
+  benefitUnit: string | null;
   targetPrefecture: string | null;
   targetCity: string | null;
   targetWard: string | null;
+  applicationRequired: boolean | null;
+  applicationMethod: string | null;
+  applicationPeriodType: string | null;
   applicationUrl: string | null;
   deadline: string | null;
+  confidenceLevel: string | null;
 };
 
 type ApiMatch = {
   program: ApiProgram;
   score: number;
-  status: "eligible" | "possible" | string;
+  status: MatchStatus;
   reasons: string[];
   warnings: string[];
 };
@@ -93,6 +118,11 @@ const flagClass = {
   期限が近い: "bg-sky-600 text-white",
   確認が必要: "bg-amber-500 text-white",
 } as const satisfies Record<BenefitFlag, string>;
+
+const statusClass = {
+  eligible: "border-emerald-200 bg-emerald-50 text-emerald-700",
+  possible: "border-amber-200 bg-amber-50 text-amber-700",
+} as const;
 
 // 外部アイコン依存を増やさず、カテゴリごとの線画アイコンだけをここで管理する。
 const iconPath = {
@@ -191,7 +221,7 @@ export default function BenefitsPage() {
 
   return (
     <main className="min-h-screen bg-[linear-gradient(150deg,#f8fffc_0%,#f7fbff_48%,#f1f8f4_100%)] text-slate-950">
-      <SiteHeader />
+      <AppHeader />
 
       <div className="mx-auto w-full max-w-7xl px-4 py-7 sm:px-6 lg:px-8">
         {/* 診断完了とヒット件数を最初に見せて、結果画面であることを明確にする。 */}
@@ -332,52 +362,10 @@ export default function BenefitsPage() {
   );
 }
 
-function SiteHeader() {
-  return (
-    // プロフィール入力画面と同じサービスに見えるよう、ブランドと主要ナビを固定表示する。
-    <header className="border-b border-slate-200 bg-white">
-      <div className="mx-auto flex h-20 w-full max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
-        <Link href="/" className="flex items-center gap-3">
-          <div className="grid h-11 w-11 place-items-center rounded-full bg-emerald-50 ring-1 ring-emerald-100">
-            <Icon
-              path="M12 4c2.2 0 4 1.8 4 4 0 3.5-4 6-4 6S8 11.5 8 8c0-2.2 1.8-4 4-4Zm-7 9c3.5 0 7 3 7 7-3.5 0-7-3-7-7Zm14 0c-3.5 0-7 3-7 7 3.5 0 7-3 7-7Z"
-              className="h-7 w-7 text-emerald-700"
-            />
-          </div>
-          <div>
-            <p className="text-lg font-bold leading-none">俺たちの血肉</p>
-            <p className="mt-1 text-xs font-semibold text-slate-500">
-              あなたに合った給付金を、かんたん検索
-            </p>
-          </div>
-        </Link>
-
-        <nav className="hidden items-center gap-6 text-sm font-bold text-slate-700 md:flex">
-          <a className="flex items-center gap-2 hover:text-emerald-700" href="#">
-            <Icon path="M12 20s-7-4.5-7-10a4 4 0 0 1 7-2.7A4 4 0 0 1 19 10c0 5.5-7 10-7 10Z" className="h-5 w-5" />
-            お気に入り
-          </a>
-          <a className="relative flex items-center gap-2 hover:text-emerald-700" href="#">
-            <Icon path="M18 9a6 6 0 1 0-12 0c0 7-3 7-3 7h18s-3 0-3-7M10 19h4" className="h-5 w-5" />
-            <span className="absolute -left-2 -top-2 grid h-5 w-5 place-items-center rounded-full bg-rose-500 text-[10px] text-white">
-              2
-            </span>
-            お知らせ
-          </a>
-          <a className="flex items-center gap-2 hover:text-emerald-700" href="#">
-            <Icon path="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8Zm-7 8a7 7 0 0 1 14 0" className="h-5 w-5" />
-            メニュー
-          </a>
-        </nav>
-      </div>
-    </header>
-  );
-}
-
 function BenefitsPageFallback() {
   return (
     <main className="min-h-screen bg-[linear-gradient(150deg,#f8fffc_0%,#f7fbff_48%,#f1f8f4_100%)] text-slate-950">
-      <SiteHeader />
+      <AppHeader />
       <div className="mx-auto w-full max-w-7xl px-4 py-7 sm:px-6 lg:px-8">
         <section className="rounded-[8px] border border-emerald-100 bg-white/70 px-5 py-6 shadow-[0_18px_50px_-32px_rgba(15,23,42,0.45)] sm:px-8 lg:px-10">
           <p className="text-sm font-bold text-slate-700">
@@ -411,6 +399,9 @@ function BenefitCard({
             <span className={`rounded-[4px] px-2 py-1 text-xs font-bold ${flagClass[benefit.flag]}`}>
               {benefit.flag}
             </span>
+            <span className={`rounded-[4px] border px-2 py-1 text-xs font-bold ${getStatusClass(benefit.status)}`}>
+              {benefit.statusLabel}
+            </span>
           </div>
           <h2 className="mt-3 text-lg font-bold leading-snug text-slate-950">
             {benefit.name}
@@ -426,7 +417,11 @@ function BenefitCard({
             <p className="mt-2 text-xs font-semibold leading-5 text-amber-700">
               確認事項: {benefit.warnings.join(" / ")}
             </p>
-          ) : null}
+          ) : (
+            <p className="mt-2 text-xs font-semibold leading-5 text-emerald-700">
+              入力内容では大きな確認事項はありません
+            </p>
+          )}
         </div>
 
         <Metric label="もらえる金額" value={benefit.amount} tone="amount" />
@@ -475,6 +470,9 @@ function BenefitDetailModal({
               <span className={`rounded-[4px] px-2 py-1 text-xs font-bold ${flagClass[benefit.flag]}`}>
                 {benefit.flag}
               </span>
+              <span className={`rounded-[4px] border px-2 py-1 text-xs font-bold ${getStatusClass(benefit.status)}`}>
+                {benefit.statusLabel}
+              </span>
             </div>
             <h2
               id="benefit-detail-title"
@@ -502,6 +500,12 @@ function BenefitDetailModal({
             <DetailMetric label="マッチ度" value={`${benefit.score}点`} />
             <DetailMetric label="もらえる金額" value={benefit.amount} />
             <DetailMetric label="申請期限" value={benefit.deadline} />
+          </div>
+
+          <div className="grid gap-3 sm:grid-cols-3">
+            <DetailMetric label="支援種別" value={benefit.supportType} />
+            <DetailMetric label="申請方法" value={benefit.applicationMethod} />
+            <DetailMetric label="データ信頼度" value={benefit.confidenceLabel} />
           </div>
 
           <section>
@@ -532,9 +536,15 @@ function BenefitDetailModal({
           </button>
           <button
             type="button"
-            className="inline-flex h-11 items-center justify-center rounded-[6px] bg-emerald-700 px-5 text-sm font-bold text-white transition hover:bg-emerald-800"
+            onClick={() => {
+              if (benefit.applicationUrl) {
+                window.open(benefit.applicationUrl, "_blank", "noopener,noreferrer");
+              }
+            }}
+            disabled={!benefit.applicationUrl}
+            className="inline-flex h-11 items-center justify-center rounded-[6px] bg-emerald-700 px-5 text-sm font-bold text-white transition hover:bg-emerald-800 disabled:cursor-not-allowed disabled:bg-slate-300"
           >
-            申請する
+            {benefit.applicationUrl ? "申請ページを開く" : "公式情報を確認"}
           </button>
         </div>
       </div>
@@ -643,15 +653,20 @@ function getPriorityValue(flag: BenefitFlag) {
 function buildSearchConditionLabels(profile: ApiProfile) {
   const labels = [
     profile.prefecture,
+    profile.city,
+    profile.ward,
     getBirthConditionLabel(profile),
     profile.householdIncome ? `世帯年収 ${profile.householdIncome}` : "",
+    profile.monthlyIncome ? `月収 ${profile.monthlyIncome.toLocaleString()}円` : "",
+    profile.housingStatus ? `住居 ${getHousingStatusLabel(profile.housingStatus)}` : "",
     profile.familyType,
     `子ども ${profile.childrenCount}人`,
     profile.gender ? `性別 ${profile.gender}` : "",
-    profile.taxExempt ? `非課税世帯 ${profile.taxExempt}` : "",
+    `非課税世帯 ${getBooleanConditionLabel(profile.isTaxExemptHousehold)}`,
+    `世帯主 ${getBooleanConditionLabel(profile.isHouseholdHead)}`,
   ] as const;
 
-  return labels.filter((label) => label.length > 0);
+  return labels.filter((label): label is string => Boolean(label && label.length > 0));
 }
 
 function getBirthConditionLabel(profile: ApiProfile) {
@@ -674,7 +689,7 @@ function mapMatchToBenefit(match: ApiMatch): Benefit {
   return {
     id: String(program.id),
     name: program.title,
-    amount: program.benefit ?? "公式情報を確認",
+    amount: formatBenefitAmount(program),
     deadline: program.deadline ? program.deadline.replaceAll("-", "/") : "随時受付",
     overview: program.summary,
     target: getTargetLabel(program),
@@ -683,13 +698,19 @@ function mapMatchToBenefit(match: ApiMatch): Benefit {
     provider: program.provider,
     score: match.score,
     status: match.status,
-    reasons: match.reasons,
-    warnings: match.warnings,
+    statusLabel: getStatusLabel(match.status),
+    supportType: getSupportTypeLabel(program.supportType),
+    applicationMethod: getApplicationMethodLabel(program.applicationMethod),
+    applicationUrl: program.applicationUrl,
+    confidenceLabel: getConfidenceLabel(program.confidenceLevel),
+    reasons: match.reasons ?? [],
+    warnings: match.warnings ?? [],
   };
 }
 
 function getBenefitFlag(match: ApiMatch): BenefitFlag {
-  if (match.warnings.length > 0 || match.status === "possible") return "確認が必要";
+  if ((match.warnings ?? []).length > 0 || match.status === "possible") return "確認が必要";
+  if (isDeadlineSoon(match.program.deadline)) return "期限が近い";
   if (match.score >= 90) return "おすすめ";
   return "おすすめ";
 }
@@ -699,6 +720,10 @@ function getBenefitTone(category: string | null): BenefitTone {
     housing: "housing",
     childcare: "child",
     low_income: "tax",
+    livelihood: "work",
+    disability: "care",
+    education: "school",
+    medical: "medical",
   } as const;
 
   if (!category) return "work";
@@ -730,7 +755,7 @@ function getAge(birthDate: Date) {
 function getDeadlineValue(deadline: string) {
   if (deadline === "随時受付") return Number.MAX_SAFE_INTEGER;
 
-  const date = new Date(deadline);
+  const date = new Date(deadline.replaceAll("/", "-"));
   if (Number.isNaN(date.getTime())) return Number.MAX_SAFE_INTEGER;
   return date.getTime();
 }
@@ -739,4 +764,131 @@ function getAmountValue(amount: string) {
   const matched = amount.match(/([\d,]+)円/);
   if (!matched) return 0;
   return Number(matched[1].replaceAll(",", ""));
+}
+
+function formatBenefitAmount(program: ApiProgram) {
+  if (program.benefitAmount !== null) {
+    const amount = `${program.benefitAmount.toLocaleString()}円`;
+    const type = getBenefitAmountTypeLabel(program.benefitAmountType);
+    const unit = getBenefitUnitLabel(program.benefitUnit);
+    return `${type}${amount}${unit ? ` / ${unit}` : ""}`;
+  }
+
+  return program.benefit ?? "公式情報を確認";
+}
+
+function isDeadlineSoon(deadline: string | null) {
+  if (!deadline) return false;
+
+  const deadlineDate = new Date(deadline);
+  if (Number.isNaN(deadlineDate.getTime())) return false;
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  deadlineDate.setHours(0, 0, 0, 0);
+
+  const daysUntilDeadline = Math.ceil(
+    (deadlineDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24)
+  );
+
+  return daysUntilDeadline >= 0 && daysUntilDeadline <= 30;
+}
+
+function getStatusLabel(status: MatchStatus) {
+  if (status === "eligible") return "条件に合致";
+  if (status === "possible") return "確認後に対象の可能性";
+  return status;
+}
+
+function getStatusClass(status: MatchStatus) {
+  if (status === "eligible") return statusClass.eligible;
+  if (status === "possible") return statusClass.possible;
+  return "border-slate-200 bg-slate-50 text-slate-600";
+}
+
+function getBenefitAmountTypeLabel(type: string | null) {
+  const labels: Record<string, string> = {
+    fixed: "",
+    max_amount: "最大 ",
+    depends: "条件により ",
+    free_text: "",
+    unknown: "",
+  };
+
+  return type ? labels[type] ?? "" : "";
+}
+
+function getBenefitUnitLabel(unit: string | null) {
+  const labels: Record<string, string> = {
+    per_person: "1人あたり",
+    per_child: "子ども1人あたり",
+    per_household: "1世帯あたり",
+    per_month: "月額",
+    per_use: "1回あたり",
+    one_time: "一回限り",
+    other: "その他",
+    unknown: "",
+  };
+
+  return unit ? labels[unit] ?? "" : "";
+}
+
+function getSupportTypeLabel(type: string | null) {
+  const labels: Record<string, string> = {
+    cash: "現金給付",
+    subsidy: "助成",
+    medical: "医療費助成",
+    service_discount: "サービス減免",
+    service_dispatch: "サービス派遣",
+    loan: "貸付",
+    goods: "物品給付",
+    consultation: "相談",
+    tax_reduction: "税負担軽減",
+    other: "その他",
+  };
+
+  return type ? labels[type] ?? type : "未設定";
+}
+
+function getApplicationMethodLabel(method: string | null) {
+  const labels: Record<string, string> = {
+    online: "オンライン",
+    mail: "郵送",
+    counter: "窓口",
+    automatic: "自動判定",
+    not_required: "申請不要",
+    unknown: "要確認",
+  };
+
+  return method ? labels[method] ?? method : "要確認";
+}
+
+function getConfidenceLabel(confidence: string | null) {
+  const labels: Record<string, string> = {
+    official: "公式情報",
+    manual_checked: "確認済み",
+    estimated: "推定を含む",
+    dummy: "サンプル",
+  };
+
+  return confidence ? labels[confidence] ?? confidence : "未設定";
+}
+
+function getHousingStatusLabel(status: string) {
+  const labels: Record<string, string> = {
+    owned: "持ち家",
+    rented: "賃貸",
+    public_housing: "公営住宅",
+    living_with_family: "家族と同居",
+    other: "その他",
+    unknown: "不明",
+  };
+
+  return labels[status] ?? status;
+}
+
+function getBooleanConditionLabel(value: boolean | null) {
+  if (value === true) return "はい";
+  if (value === false) return "いいえ";
+  return "未確認";
 }

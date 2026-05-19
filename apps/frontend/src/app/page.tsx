@@ -1,9 +1,9 @@
 "use client";
 
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { FormEvent } from "react";
 import { useEffect, useMemo, useState } from "react";
+import { AppHeader } from "@/components/AppHeader";
 
 const DEFAULT_API_BASE_URL = "http://localhost:8000" as const;
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? DEFAULT_API_BASE_URL;
@@ -212,7 +212,7 @@ export default function ProfileInputPage() {
   return (
     // 給付金判定の前段として、ユーザー属性を入力する画面
     <main className="min-h-screen bg-[linear-gradient(135deg,#f7fffb_0%,#f8fbff_52%,#eef8f3_100%)] text-slate-950">
-      <SiteHeader />
+      <AppHeader />
 
       <div className="mx-auto w-full max-w-6xl px-4 py-9 sm:px-6 lg:px-8">
         <section className="text-center">
@@ -409,50 +409,6 @@ export default function ProfileInputPage() {
 
 const inputClass =
   "h-14 w-full rounded-[6px] border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-900 shadow-sm outline-none transition placeholder:text-slate-400 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100 disabled:bg-slate-100" as const;
-
-function SiteHeader() {
-  return (
-    <header className="border-b border-slate-200 bg-white">
-      <div className="mx-auto flex h-20 w-full max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
-        <Link href="/" className="flex items-center gap-3">
-          <div className="grid h-11 w-11 place-items-center rounded-full bg-emerald-50 ring-1 ring-emerald-100">
-            <svg
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth="2"
-              className="h-7 w-7 text-emerald-700"
-              aria-hidden="true"
-            >
-              <path d="M12 4c2.2 0 4 1.8 4 4 0 3.5-4 6-4 6S8 11.5 8 8c0-2.2 1.8-4 4-4Zm-7 9c3.5 0 7 3 7 7-3.5 0-7-3-7-7Zm14 0c-3.5 0-7 3-7 7 3.5 0 7-3 7-7Z" />
-            </svg>
-          </div>
-          <div>
-            <p className="text-lg font-bold leading-none">俺たちの血肉</p>
-            <p className="mt-1 text-xs font-semibold text-slate-500">
-              あなたに合った給付金を、かんたん検索
-            </p>
-          </div>
-        </Link>
-
-        <a
-          href="#"
-          className="hidden items-center gap-2 text-sm font-bold text-slate-700 hover:text-emerald-700 md:flex"
-        >
-          <span
-            className="grid h-6 w-6 place-items-center rounded-full border border-emerald-700 text-xs text-emerald-700"
-            aria-hidden="true"
-          >
-            ?
-          </span>
-          このサイトについて
-        </a>
-      </div>
-    </header>
-  );
-}
 
 function SegmentedFamily({
   value,
