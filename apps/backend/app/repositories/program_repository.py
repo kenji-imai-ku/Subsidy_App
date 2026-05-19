@@ -20,7 +20,11 @@ def list_programs(db: Session, category: str | None = None, prefecture: str | No
 def get_program_by_id(db: Session, program_id: int):
     return (
         db.query(SupportProgram)
-        .options(joinedload(SupportProgram.condition))
+        .options(
+            joinedload(SupportProgram.condition),
+            joinedload(SupportProgram.sources),
+            joinedload(SupportProgram.required_document_items),
+        )
         .filter(SupportProgram.id == program_id)
         .filter(SupportProgram.is_active == True)
         .first()
