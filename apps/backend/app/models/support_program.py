@@ -58,6 +58,18 @@ class SupportProgram(Base):
         cascade="all, delete-orphan",
     )
 
+    sources = relationship(
+        "ProgramSource",
+        back_populates="program",
+        cascade="all, delete-orphan",
+    )
+
+    required_document_items = relationship(
+        "ProgramRequiredDocument",
+        back_populates="program",
+        cascade="all, delete-orphan",
+    )
+
 
 class SupportProgramCondition(Base):
     __tablename__ = "support_program_conditions"
