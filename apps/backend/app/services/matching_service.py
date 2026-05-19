@@ -17,12 +17,6 @@ def calculate_age(birth_date: date, today: date | None = None) -> int:
 
 
 def calculate_match_score(profile, program, condition):
-    # TODO(v2 matching):
-    # v2で追加された profile_employment_statuses,
-    # profile_special_conditions,
-    # support_program_conditions の拡張項目を使って、
-    # マッチング条件を段階的に追加する。
-
     # 初期スコア100点、ステータスは eligible でスタート
     score = 100
     reasons = []
@@ -30,6 +24,8 @@ def calculate_match_score(profile, program, condition):
     status = "eligible"
 
     age = calculate_age(profile.birth_date) if profile.birth_date else None
+    employment = profile.employment
+    special = profile.special_conditions
 
     # -------------------------
     # 1. 地域条件 (都道府県・市区町村・区)
@@ -148,14 +144,82 @@ def calculate_match_score(profile, program, condition):
         else:
             return None  # 性別不一致は除外
 
+    # 世帯主 (v2拡張)
+    if condition and getattr(condition, "requires_household_head", False) is True:
+        if profile.is_household_head is True:
+            reasons.append("世帯主である条件を満たしています")
+        elif profile.is_household_head is False:
+            return None
+        else:
+            score -= 10
+            warnings.append("世帯主であるか確認が必要です")
+
+    # 賃貸 (v2拡張)
+    if condition and getattr(condition, "requires_rent", False) is True:
+        if profile.housing_status == "rented":
+            reasons.append("賃貸住宅にお住まいの条件を満たしています")
+        elif profile.housing_status and profile.housing_status != "rented":
+            return None
+        else:
+            score -= 10
+            warnings.append("住居形態（賃貸等）の確認が必要です")
+
     # -------------------------
-    # 5. 特殊条件・人間確認: (v2拡張)
+    # 5. 就労・特別条件 (v2拡張)
+    # -------------------------
+    if condition:
+        # 離職
+        if getattr(condition, "requires_unemployed", False) is True:
+            is_unemp = employment.is_unemployed if employment else None
+            if is_unemp is True:
+                reasons.append("離職中の方を対象とした条件を満たしています")
+            elif is_unemp is False:
+                return None
+            else:
+                score -= 20
+                warnings.append("離職中であるか確認が必要です")
+
+        # 収入減少
+        if getattr(condition, "requires_income_decreased", False) is True:
+            inc_dec = employment.income_decreased if employment else None
+            if inc_dec is True:
+                reasons.append("収入が減少している条件を満たしています")
+            elif inc_dec is False:
+                return None
+            else:
+                score -= 15
+                warnings.append("収入減少の有無について確認が必要です")
+
+        # 健康保険
+        if getattr(condition, "requires_health_insurance", False) is True:
+            has_ins = special.has_health_insurance if special else None
+            if has_ins is True:
+                reasons.append("健康保険に加入している条件を満たしています")
+            elif has_ins is False:
+                return None
+            else:
+                score -= 10
+                warnings.append("健康保険の加入状況を確認してください")
+
+        # 障害
+        if getattr(condition, "requires_disability", False) is True:
+            has_dis = special.has_disability if special else None
+            if has_dis is True:
+                reasons.append("障害をお持ちの方を対象とした条件を満たしています")
+            elif has_dis is False:
+                return None
+            else:
+                score -= 20
+                warnings.append("障害の有無について確認が必要です")
+
+    # -------------------------
+    # 6. 特殊条件・人間確認 (v2拡張)
     # -------------------------
     if condition and getattr(condition, "manual_check_required", False):
         warnings.append("詳細な対象条件は、自治体の窓口等で確認が必要です")
 
     # -------------------------
-    # 6. 最終判定の集約
+    # 7. 最終判定の集約
     # -------------------------
     # 減点が発生している場合はステータスをダウングレード
     if warnings:

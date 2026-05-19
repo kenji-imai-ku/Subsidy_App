@@ -201,7 +201,9 @@ def seed_programs_data(db: Session):
     count = 0
     for data in programs_data:
         condition_data = data.pop("condition", None)
-        program = get_or_create_program(data["title"], data["provider"], **data)
+        title = data.pop("title")
+        provider = data.pop("provider")
+        program = get_or_create_program(title, provider, **data)
         
         if condition_data:
             if not program.condition:
