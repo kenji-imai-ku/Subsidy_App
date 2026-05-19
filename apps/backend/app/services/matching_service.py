@@ -17,6 +17,12 @@ def calculate_age(birth_date: date, today: date | None = None) -> int:
 
 
 def calculate_match_score(profile, program, condition):
+    # TODO(v2 matching):
+    # v2で追加された profile_employment_statuses,
+    # profile_special_conditions,
+    # support_program_conditions の拡張項目を使って、
+    # マッチング条件を段階的に追加する。
+    
     score = 0
     reasons = []
     warnings = []
@@ -148,7 +154,13 @@ def calculate_match_score(profile, program, condition):
     score += household_score
 
     # -------------------------
-    # 5. 判定結果の集約
+    # 5. 特殊条件・人間確認: (v2拡張)
+    # -------------------------
+    if condition and getattr(condition, "manual_check_required", False):
+        warnings.append("詳細な対象条件は、自治体の窓口等で確認が必要です")
+
+    # -------------------------
+    # 6. 判定結果の集約
     # -------------------------
     if failed_required_conditions:
         return None
