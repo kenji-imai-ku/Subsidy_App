@@ -16,3 +16,9 @@ def create_program(request: ProgramCreateRequest, db: Session = Depends(get_db))
 @router.put("/{program_id}", response_model=ProgramDetailResponse)
 def update_program(program_id: int, request: ProgramUpdateRequest, db: Session = Depends(get_db)):
     return program_service.update_program(db, program_id, request)
+
+
+@router.post("/seed", tags=["dev"])
+def seed_programs(db: Session = Depends(get_db)):
+    from app.seed.seed_programs import seed_programs_data
+    return seed_programs_data(db)

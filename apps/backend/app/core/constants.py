@@ -54,6 +54,15 @@ class SupportType(str, Enum):
     TAX_REDUCTION = "tax_reduction"
     OTHER = "other"
 
+class Category(str, Enum):
+    HOUSING = "housing"
+    CHILDCARE = "childcare"
+    LIVELIHOOD = "livelihood"
+    DISABILITY = "disability"
+    EDUCATION = "education"
+    MEDICAL = "medical"
+    OTHER = "other"
+
 class BenefitAmountType(str, Enum):
     FIXED = "fixed"
     MAX_AMOUNT = "max_amount"
