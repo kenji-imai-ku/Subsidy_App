@@ -17,147 +17,220 @@ def calculate_age(birth_date: date, today: date | None = None) -> int:
 
 
 def calculate_match_score(profile, program, condition):
-    score = 0
+    # 初期スコア100点、ステータスは eligible でスタート
+    score = 100
     reasons = []
     warnings = []
-    failed_required_conditions = []
+    status = "eligible"
 
     age = calculate_age(profile.birth_date) if profile.birth_date else None
+    employment = profile.employment
+    special = profile.special_conditions
 
     # -------------------------
-    # 1. 地域条件: 30点
+    # 1. 地域条件 (都道府県・市区町村・区)
     # -------------------------
+    # 都道府県判定 (ハードフィルタ)
     if program.target_prefecture:
         if program.target_prefecture == profile.prefecture:
-            score += 30
-            reasons.append("居住地が対象都道府県に含まれています")
+            reasons.append("居住地が対象都道府県に合致しています")
         else:
-            failed_required_conditions.append("対象都道府県が一致しません")
+            return None  # 都道府県不一致は除外
     else:
-        score += 30
-        reasons.append("全国または地域指定なしの制度です")
+        reasons.append("地域指定なし（全国対象）の制度です")
 
-    # 市区町村/区の判定はMVPでは警告に留める
+    # 市区町村判定
     if program.target_city:
-        warnings.append("市区町村単位の対象条件は公式情報の確認が必要です")
-    if program.target_ward:
-        warnings.append("区単位の対象条件は公式情報の確認が必要です")
-
-    # -------------------------
-    # 2. 年齢条件: 20点
-    # -------------------------
-    has_age_condition = condition and (
-        condition.min_age is not None or condition.max_age is not None
-    )
-
-    if has_age_condition:
-        if age is None:
-            warnings.append("年齢条件の確認が必要です")
-        elif condition.min_age is not None and age < condition.min_age:
-            failed_required_conditions.append("最低年齢条件を満たしていません")
-        elif condition.max_age is not None and age > condition.max_age:
-            failed_required_conditions.append("最高年齢条件を満たしていません")
+        if profile.city:
+            if program.target_city == profile.city:
+                reasons.append(f"居住地が対象市区町村（{profile.city}）に合致しています")
+            else:
+                return None  # 市区町村不一致は除外
         else:
-            score += 20
-            reasons.append("年齢条件を満たしている可能性があります")
+            # 市区町村指定があるがプロフィールが未入力の場合
+            score -= 20
+            warnings.append("市区町村単位の対象条件の確認が必要です")
+    
+    # 区判定
+    if program.target_ward:
+        if profile.ward:
+            if program.target_ward == profile.ward:
+                reasons.append(f"居住地が対象の区（{profile.ward}）に合致しています")
+            else:
+                return None  # 区不一致は除外
+        else:
+            # 区指定があるがプロフィールが未入力の場合
+            score -= 10
+            warnings.append("区単位の対象条件の確認が必要です")
+
+    # -------------------------
+    # 2. 年齢条件
+    # -------------------------
+    if condition and (condition.min_age is not None or condition.max_age is not None):
+        if age is None:
+            score -= 20
+            warnings.append("年齢制限がある制度です。生年月日の登録を確認してください")
+        elif condition.min_age is not None and age < condition.min_age:
+            return None  # 年齢下限未満は除外
+        elif condition.max_age is not None and age > condition.max_age:
+            return None  # 年齢上限超過は除外
+        else:
+            reasons.append("年齢条件に合致しています")
     else:
-        score += 20
-        reasons.append("年齢条件の指定がありません")
+        reasons.append("年齢制限のない制度です")
 
     # -------------------------
-    # 3. 所得・税条件: 30点
+    # 3. 所得・税条件
     # -------------------------
-    income_tax_score = 0
-
-    # 所得上限の判定
+    # 所得上限
     if condition and condition.max_annual_income is not None:
         if profile.annual_income_max is None:
-            warnings.append("所得条件の確認が必要です")
-        elif profile.annual_income_max <= condition.max_annual_income:
-            income_tax_score += 15
-            reasons.append("所得条件を満たしている可能性があります")
+            score -= 20
+            warnings.append("所得制限がある制度です。所得情報の確認が必要です")
+        elif profile.annual_income_max > condition.max_annual_income:
+            return None  # 所得上限超過は除外
         else:
-            # 所得帯の上限で比較しているため、完全に断定しすぎない
-            failed_required_conditions.append("所得制限を満たさない可能性があります")
+            # 閾値に近い場合の減点 (閾値の80%以上)
+            if profile.annual_income_max >= (condition.max_annual_income * 0.8):
+                score -= 15
+                warnings.append("所得制限の境界線付近です。正確な所得による確認が必要です")
+            else:
+                reasons.append("所得条件に合致している可能性が高いです")
     else:
-        income_tax_score += 15
-        reasons.append("所得上限の指定がありません")
+        reasons.append("所得制限のない制度です")
 
-    # 非課税世帯の判定
+    # 非課税世帯
     if condition and condition.requires_tax_exempt is True:
         if profile.is_tax_exempt_household is True:
-            income_tax_score += 15
-            reasons.append("非課税世帯条件を満たしています")
-        elif profile.is_tax_exempt_household is None:
-            warnings.append("非課税世帯に該当するか確認が必要です")
+            reasons.append("非課税世帯の条件を満たしています")
+        elif profile.is_tax_exempt_household is False:
+            return None  # 非課税世帯限定で、明確に「いいえ」の場合は除外
         else:
-            failed_required_conditions.append("非課税世帯向けの制度です")
-    else:
-        income_tax_score += 15
-        reasons.append("非課税世帯条件の指定がありません")
-
-    score += income_tax_score
+            # 「わからない・不明」の場合
+            score -= 20
+            warnings.append("住民税非課税世帯であるか確認が必要です")
 
     # -------------------------
-    # 4. 世帯・属性条件: 20点
+    # 4. 世帯・属性条件
     # -------------------------
-    household_score = 0
-
     # 子どもの有無
     if condition and condition.requires_children is True:
         if profile.has_children:
-            household_score += 10
             reasons.append("子どもがいる世帯向け条件を満たしています")
+            if condition.min_children_count is not None:
+                if profile.children_count < condition.min_children_count:
+                    return None  # 子どもの人数不足は除外
         else:
-            failed_required_conditions.append("子どもがいる世帯向けの制度です")
-    else:
-        household_score += 10
-        reasons.append("子どもの有無に関する条件指定がありません")
-
-    # 子どもの人数 (加点・判定要素)
-    if condition and condition.min_children_count is not None:
-        if profile.children_count < condition.min_children_count:
-            failed_required_conditions.append("子どもの人数条件を満たしていません")
+            return None  # 子ども必須で「なし」の場合は除外
 
     # ひとり親
     if condition and condition.requires_single_parent is True:
         if profile.is_single_parent is True:
-            household_score += 5
             reasons.append("ひとり親世帯の条件を満たしています")
-        elif profile.is_single_parent is None:
-            warnings.append("ひとり親世帯に該当するか確認が必要です")
+        elif profile.is_single_parent is False:
+            return None  # ひとり親限定で、明確に「いいえ」の場合は除外
         else:
-            failed_required_conditions.append("ひとり親世帯向けの制度です")
-    else:
-        household_score += 5
-        reasons.append("ひとり親に関する条件指定がありません")
+            # 「不明・その他」の場合
+            score -= 15
+            warnings.append("ひとり親世帯等の対象条件の確認が必要です")
 
     # 性別
     if condition and condition.required_gender is not None:
         if profile.gender == condition.required_gender:
-            household_score += 5
-            reasons.append("性別条件を満たしています")
-        elif profile.gender == "no_answer":
-            warnings.append("性別に関する対象条件の確認が必要です")
+            reasons.append("性別条件に合致しています")
+        elif profile.gender in ["no_answer", "other"]:
+            score -= 10
+            warnings.append("性別による対象制限の確認が必要です")
         else:
-            failed_required_conditions.append("性別条件を満たしていません")
-    else:
-        household_score += 5
-        reasons.append("性別に関する条件指定がありません")
+            return None  # 性別不一致は除外
 
-    score += household_score
+    # 世帯主 (v2拡張)
+    if condition and getattr(condition, "requires_household_head", False) is True:
+        if profile.is_household_head is True:
+            reasons.append("世帯主である条件を満たしています")
+        elif profile.is_household_head is False:
+            return None
+        else:
+            score -= 10
+            warnings.append("世帯主であるか確認が必要です")
+
+    # 賃貸 (v2拡張)
+    if condition and getattr(condition, "requires_rent", False) is True:
+        if profile.housing_status == "rented":
+            reasons.append("賃貸住宅にお住まいの条件を満たしています")
+        elif profile.housing_status and profile.housing_status != "rented":
+            return None
+        else:
+            score -= 10
+            warnings.append("住居形態（賃貸等）の確認が必要です")
 
     # -------------------------
-    # 5. 判定結果の集約
+    # 5. 就労・特別条件 (v2拡張)
     # -------------------------
-    if failed_required_conditions:
-        return None
+    if condition:
+        # 離職
+        if getattr(condition, "requires_unemployed", False) is True:
+            is_unemp = employment.is_unemployed if employment else None
+            if is_unemp is True:
+                reasons.append("離職中の方を対象とした条件を満たしています")
+            elif is_unemp is False:
+                return None
+            else:
+                score -= 20
+                warnings.append("離職中であるか確認が必要です")
 
-    status = "possible" if warnings else "eligible"
+        # 収入減少
+        if getattr(condition, "requires_income_decreased", False) is True:
+            inc_dec = employment.income_decreased if employment else None
+            if inc_dec is True:
+                reasons.append("収入が減少している条件を満たしています")
+            elif inc_dec is False:
+                return None
+            else:
+                score -= 15
+                warnings.append("収入減少の有無について確認が必要です")
+
+        # 健康保険
+        if getattr(condition, "requires_health_insurance", False) is True:
+            has_ins = special.has_health_insurance if special else None
+            if has_ins is True:
+                reasons.append("健康保険に加入している条件を満たしています")
+            elif has_ins is False:
+                return None
+            else:
+                score -= 10
+                warnings.append("健康保険の加入状況を確認してください")
+
+        # 障害
+        if getattr(condition, "requires_disability", False) is True:
+            has_dis = special.has_disability if special else None
+            if has_dis is True:
+                reasons.append("障害をお持ちの方を対象とした条件を満たしています")
+            elif has_dis is False:
+                return None
+            else:
+                score -= 20
+                warnings.append("障害の有無について確認が必要です")
+
+    # -------------------------
+    # 6. 特殊条件・人間確認 (v2拡張)
+    # -------------------------
+    if condition and getattr(condition, "manual_check_required", False):
+        warnings.append("詳細な対象条件は、自治体の窓口等で確認が必要です")
+
+    # -------------------------
+    # 7. 最終判定の集約
+    # -------------------------
+    # 減点が発生している場合はステータスをダウングレード
+    if warnings:
+        status = "possible"
+
+    # スコアの下限・上限補正
+    final_score = max(0, min(score, 100))
 
     return {
         "program": program,
-        "score": min(score, 100),
+        "score": final_score,
         "status": status,
         "reasons": reasons,
         "warnings": warnings,
