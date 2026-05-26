@@ -10,7 +10,12 @@ dependencies = [
     "fastapi (>=0.136.1,<0.137.0)",
     "uvicorn (>=0.46.0,<0.47.0)",
     "sqlalchemy (>=2.0.0)",
-    "pydantic-settings (>=2.0.0)"
+    "pydantic-settings (>=2.0.0)",
+    "openai (>=2.38.0,<3.0.0)",
+    "python-dotenv (>=1.2.2,<2.0.0)",
+    "ddgs (>=9.14.4,<10.0.0)",
+    "tavily-python (>=0.7.24,<0.8.0)",
+    "duckduckgo-search (>=8.1.1,<9.0.0)",
 ]
 
 [tool.poetry]
