@@ -12,7 +12,7 @@ const tabs = [
 export default function NotificationsPage() {
   return (
     <main className="min-h-screen bg-white text-slate-950">
-      <AppHeader />
+      <AppHeader authAction="logout" />
 
       <div className="mx-auto w-full max-w-6xl px-4 py-7 sm:px-6 lg:px-8">
         <section>

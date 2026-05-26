@@ -1,6 +1,21 @@
-import Link from "next/link";
+"use client";
 
-export function AppHeader() {
+import Link from "next/link";
+import { usePathname } from "next/navigation";
+
+type AppHeaderProps = {
+  authAction?: "login" | "logout";
+};
+
+export function AppHeader({ authAction = "login" }: AppHeaderProps) {
+  const authLabel = authAction === "logout" ? "ログアウト" : "ログイン";
+  const pathname = usePathname();
+
+  const isActive = (href: string) => {
+    if (href === "/") return pathname === href;
+    return pathname === href || pathname.startsWith(`${href}/`);
+  };
+
   return (
     <header className="sticky top-0 z-40 border-b border-slate-200 bg-white/95 backdrop-blur">
       <div className="mx-auto flex h-20 w-full max-w-[1500px] items-center justify-between px-5 sm:px-7 lg:px-9">
@@ -21,26 +36,43 @@ export function AppHeader() {
           </div>
         </Link>
 
-        <nav className="hidden items-center gap-8 text-sm font-bold text-slate-800 md:flex">
-          <Link className="flex items-center gap-2 hover:text-emerald-700" href="/benefits">
-            <Icon path="M5 7h14M7 12h10M9 17h6" className="h-5 w-5" />
-            給付金一覧
+        <div className="flex items-center gap-4">
+          <nav className="hidden items-center gap-8 text-sm font-bold text-slate-800 md:flex">
+            <Link className={navLinkClass(isActive("/benefits"))} href="/benefits">
+              <Icon path="M5 7h14M7 12h10M9 17h6" className="h-5 w-5" />
+              給付金一覧
+            </Link>
+            <Link className={`${navLinkClass(isActive("/notifications"))} relative`} href="/notifications">
+              <Icon path="M18 9a6 6 0 1 0-12 0c0 7-3 7-3 7h18s-3 0-3-7M10 19h4" className="h-5 w-5" />
+              <span className="absolute -right-3 -top-3 grid h-5 min-w-5 place-items-center rounded-full bg-rose-500 px-1 text-[10px] text-white">
+                3
+              </span>
+              お知らせ
+            </Link>
+            <Link className={navLinkClass(isActive("/favorites"))} href="/favorites">
+              <Icon path="M12 20s-7-4.5-7-10a4 4 0 0 1 7-2.7A4 4 0 0 1 19 10c0 5.5-7 10-7 10Z" className="h-5 w-5" />
+              お気に入り
+            </Link>
+          </nav>
+
+          <Link
+            className="inline-flex h-10 items-center justify-center rounded-[6px] bg-emerald-700 px-4 text-sm font-bold text-white transition hover:bg-emerald-800"
+            href="/login"
+          >
+            {authLabel}
           </Link>
-          <Link className="relative flex items-center gap-2 hover:text-emerald-700" href="/notifications">
-            <Icon path="M18 9a6 6 0 1 0-12 0c0 7-3 7-3 7h18s-3 0-3-7M10 19h4" className="h-5 w-5 text-emerald-700" />
-            <span className="absolute -right-3 -top-3 grid h-5 min-w-5 place-items-center rounded-full bg-rose-500 px-1 text-[10px] text-white">
-              3
-            </span>
-            お知らせ
-          </Link>
-          <Link className="flex items-center gap-2 hover:text-emerald-700" href="#">
-            <Icon path="M12 20s-7-4.5-7-10a4 4 0 0 1 7-2.7A4 4 0 0 1 19 10c0 5.5-7 10-7 10Z" className="h-5 w-5" />
-            お気に入り
-          </Link>
-        </nav>
+        </div>
       </div>
     </header>
   );
+}
+
+function navLinkClass(active: boolean) {
+  return `flex h-10 items-center gap-2 rounded-[6px] px-3 transition ${
+    active
+      ? "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-100"
+      : "text-slate-800 hover:bg-emerald-50 hover:text-emerald-700"
+  }`;
 }
 
 function Icon({ path, className }: { path: string; className?: string }) {

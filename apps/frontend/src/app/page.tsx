@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import type { FormEvent } from "react";
 import { useEffect, useMemo, useState } from "react";
 import { AppHeader } from "@/components/AppHeader";
+import municipalitiesByPrefecture from "@/data/municipalities.json";
 
 const DEFAULT_API_BASE_URL = "http://localhost:8000" as const;
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? DEFAULT_API_BASE_URL;
@@ -78,6 +79,8 @@ const TAX_EXEMPT_OPTIONS = ["はい", "いいえ", "わからない"] as const;
 type FormData = {
   name: string;
   prefecture: string;
+  city: string;
+  ward: string;
   birthYear: string;
   birthMonth: string;
   birthDay: string;
@@ -91,6 +94,8 @@ type FormData = {
 type ApiProfile = {
   name: string;
   prefecture: string;
+  city: string | null;
+  ward: string | null;
   birthDate: string;
   householdIncome: string;
   familyType: string;
@@ -107,6 +112,8 @@ const months = Array.from({ length: 12 }, (_, i) => String(i + 1));
 const emptyFormData = {
   name: "",
   prefecture: "",
+  city: "",
+  ward: "",
   birthYear: "",
   birthMonth: "",
   birthDay: "",
@@ -138,17 +145,27 @@ export default function ProfileInputPage() {
 
         const profile = (await response.json()) as ApiProfile;
         setFormData(mapProfileToFormData(profile));
-      } catch (error) {
-        setSubmitError(
-          error instanceof Error
-            ? error.message
-            : "保存済みプロフィールを取得できませんでした"
-        );
+      } catch {
+        // 保存済みプロフィールの復元に失敗しても、新規入力は続けられるようにする。
       }
     };
 
     void fetchProfile();
   }, []);
+
+  const cityOptions = useMemo(() => {
+    if (!formData.prefecture) return [];
+
+    return municipalitiesByPrefecture[
+      formData.prefecture as keyof typeof municipalitiesByPrefecture
+    ] ?? [];
+  }, [formData.prefecture]);
+
+  const wardOptions = useMemo(() => {
+    if (!formData.city) return [];
+
+    return cityOptions.find((city) => city.name === formData.city)?.wards ?? [];
+  }, [cityOptions, formData.city]);
 
   // 選択済みの年・月から日数を計算
   const days = useMemo(() => {
@@ -169,6 +186,8 @@ export default function ProfileInputPage() {
       ...prev,
       [key]: value,
       ...(key === "birthYear" || key === "birthMonth" ? { birthDay: "" } : {}),
+      ...(key === "prefecture" ? { city: "", ward: "" } : {}),
+      ...(key === "city" ? { ward: "" } : {}),
     }));
   };
 
@@ -318,6 +337,43 @@ export default function ProfileInputPage() {
                   ))}
                 </select>
               </Field>
+
+              <Field label="お住まいの市区町村" required>
+                <select
+                  value={formData.city}
+                  onChange={(e) => updateField("city", e.target.value)}
+                  className={inputClass}
+                  disabled={!formData.prefecture}
+                  required
+                >
+                  <option value="">
+                    {formData.prefecture ? "選択してください" : "都道府県を先に選択"}
+                  </option>
+                  {cityOptions.map((city) => (
+                    <option key={city.code} value={city.name}>
+                      {city.name}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+
+              {wardOptions.length > 0 ? (
+                <Field label="お住まいの区" required>
+                  <select
+                    value={formData.ward}
+                    onChange={(e) => updateField("ward", e.target.value)}
+                    className={inputClass}
+                    required
+                  >
+                    <option value="">選択してください</option>
+                    {wardOptions.map((ward) => (
+                      <option key={ward.code} value={ward.name}>
+                        {ward.name}
+                      </option>
+                    ))}
+                  </select>
+                </Field>
+              ) : null}
             </div>
           </section>
 
@@ -444,6 +500,8 @@ function mapProfileToFormData(profile: ApiProfile): FormData {
   return {
     name: profile.name,
     prefecture: profile.prefecture,
+    city: profile.city ?? "",
+    ward: profile.ward ?? "",
     birthYear,
     birthMonth: birthMonth.replace(/^0/, ""),
     birthDay: birthDay.replace(/^0/, ""),

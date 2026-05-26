@@ -221,7 +221,7 @@ export default function BenefitsPage() {
 
   return (
     <main className="min-h-screen bg-[linear-gradient(150deg,#f8fffc_0%,#f7fbff_48%,#f1f8f4_100%)] text-slate-950">
-      <AppHeader />
+      <AppHeader authAction="logout" />
 
       <div className="mx-auto w-full max-w-7xl px-4 py-7 sm:px-6 lg:px-8">
         {/* 診断完了とヒット件数を最初に見せて、結果画面であることを明確にする。 */}
@@ -250,7 +250,7 @@ export default function BenefitsPage() {
                 width={140}
                 height={180}
                 priority
-                className="absolute -bottom-4 left-0 h-[220px] w-[170px] object-contain object-bottom lg:h-[240px] lg:w-[186px]"
+                className="absolute -bottom-4 left-0 h-[156px] w-[121px] object-contain object-bottom lg:h-[171px] lg:w-[132px]"
               />
             </div>
           </div>
@@ -365,7 +365,7 @@ export default function BenefitsPage() {
 function BenefitsPageFallback() {
   return (
     <main className="min-h-screen bg-[linear-gradient(150deg,#f8fffc_0%,#f7fbff_48%,#f1f8f4_100%)] text-slate-950">
-      <AppHeader />
+      <AppHeader authAction="logout" />
       <div className="mx-auto w-full max-w-7xl px-4 py-7 sm:px-6 lg:px-8">
         <section className="rounded-[8px] border border-emerald-100 bg-white/70 px-5 py-6 shadow-[0_18px_50px_-32px_rgba(15,23,42,0.45)] sm:px-8 lg:px-10">
           <p className="text-sm font-bold text-slate-700">
