@@ -1,7 +1,12 @@
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
 from typing import Any
+import re
 from app.repositories import program_repository
+
+
+def to_snake(name: str) -> str:
+    return re.sub(r'(?<!^)(?=[A-Z])', '_', name).lower()
 
 
 def get_programs(
@@ -37,15 +42,20 @@ def get_program_detail(db: Session, program_id: int):
 
 def create_program(db: Session, request: Any):
     # Mapping Pydantic to dict
-    program_data = request.model_dump(exclude={"condition", "sources"})
+    program_data_raw = request.model_dump(exclude={"condition", "sources"})
+    program_data = {to_snake(k): v for k, v in program_data_raw.items()}
     
     condition_data = None
     if request.condition:
-        condition_data = request.condition.model_dump()
+        condition_data_raw = request.condition.model_dump()
+        condition_data = {to_snake(k): v for k, v in condition_data_raw.items()}
         
     sources_data = None
     if request.sources:
-        sources_data = [s.model_dump() for s in request.sources]
+        sources_data = []
+        for s in request.sources:
+            s_raw = s.model_dump()
+            sources_data.append({to_snake(k): v for k, v in s_raw.items()})
         
     return program_repository.create_program(
         db, 
@@ -57,15 +67,20 @@ def create_program(db: Session, request: Any):
 
 def update_program(db: Session, program_id: int, request: Any):
     # Mapping Pydantic to dict (only provided fields)
-    program_data = request.model_dump(exclude={"condition", "sources"}, exclude_unset=True)
+    program_data_raw = request.model_dump(exclude={"condition", "sources"}, exclude_unset=True)
+    program_data = {to_snake(k): v for k, v in program_data_raw.items()}
     
     condition_data = None
     if request.condition:
-        condition_data = request.condition.model_dump(exclude_unset=True)
+        condition_data_raw = request.condition.model_dump(exclude_unset=True)
+        condition_data = {to_snake(k): v for k, v in condition_data_raw.items()}
         
     sources_data = None
     if request.sources is not None:
-        sources_data = [s.model_dump() for s in request.sources]
+        sources_data = []
+        for s in request.sources:
+            s_raw = s.model_dump()
+            sources_data.append({to_snake(k): v for k, v in s_raw.items()})
         
     program = program_repository.update_program(
         db,
