@@ -1,5 +1,6 @@
 from sqlalchemy.orm import Session, joinedload
 from app.models.support_program import SupportProgram
+from datetime import date
 
 
 def list_programs(
@@ -14,9 +15,17 @@ def list_programs(
     keyword: str | None = None,
 ):
     query = db.query(SupportProgram)
+    today = date.today()
 
     if active_only:
         query = query.filter(SupportProgram.is_active == True)
+        # 締切日または終了日が今日以前のものを除外
+        query = query.filter(
+            (SupportProgram.deadline == None) | (SupportProgram.deadline >= today)
+        )
+        query = query.filter(
+            (SupportProgram.end_date == None) | (SupportProgram.end_date >= today)
+        )
 
     if category:
         query = query.filter(SupportProgram.category == category)

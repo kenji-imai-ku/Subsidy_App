@@ -155,6 +155,11 @@ def validate_application_method(v): return normalize_value(v, APPLICATION_METHOD
 def validate_benefit_unit(v): return normalize_value(v, BENEFIT_UNIT_MAP, BenefitUnit)
 def validate_application_period_type(v): return normalize_value(v, APPLICATION_PERIOD_TYPE_MAP, ApplicationPeriodType)
 
+class ProgramEligibilityCandidate(BaseModel):
+    is_eligible: bool = Field(..., description="このページは個人の生活・個人事業主向けの具体的な支援制度情報を含むか")
+    support_type: Annotated[SupportType, BeforeValidator(validate_support_type)] = Field(SupportType.unknown, description="該当する支援の種類。対象外の場合は unknown")
+    reason: str = Field(..., description="判定理由（1〜2文程度）")
+
 class ProgramConditionCandidate(BaseModel):
     min_age: Optional[int] = None
     max_age: Optional[int] = None
@@ -207,6 +212,27 @@ class ProgramExtractionCandidate(BaseModel):
 
 # --- LLM Processing ---
 
+ELIGIBILITY_SYSTEM_PROMPT = """
+あなたは、自治体・政府・公的機関のWebページを解析し、支援制度マッチングアプリのデータベースに登録すべきページかどうかを判定するAIです。
+
+## 判定基準 (is_eligible):
+以下をすべて満たす場合のみ true にしてください：
+1. 「個人」「世帯」または「個人事業主（フリーランス等）」が直接利用できる制度である。
+2. 支援内容（給付額、割引内容、貸付、サービス提供など）が具体的に記載されている。
+3. 申請方法や利用条件などの具体的な制度情報が本文から抽出可能である。
+
+## 必ず false にする条件:
+- 純粋な法人（株式会社等）、中堅・大企業向けの制度（設備投資補助、DX支援、事業所向け大規模補助など）。
+- 制度の詳細が存在しないページ（カテゴリ一覧、ポータル、ニュース一覧、組織紹介など）。
+- リンク先に飛ぶことのみを目的としたナビゲーションページやリンク集。
+- 制度の具体的な内容が確定していない政策説明。
+
+## 支援タイプの分類 (support_type):
+true の場合、以下のいずれか（英語値）に分類してください：
+cash (現金給付), subsidy (補助・助成), medical (医療費助成), service_discount (サービス割引), service_dispatch (サービス派遣), loan (貸付), goods (物品支給), consultation (相談支援), tax_reduction (減免), other (その他).
+判定できない、または false の場合は 'unknown' にしてください。
+"""
+
 SYSTEM_PROMPT = """
 あなたは自治体や国の支援制度情報を抽出する専門家です。
 与えられたMarkdown形式の支援制度ページから情報を抽出し、指定されたJSON形式で出力してください。
@@ -228,23 +254,24 @@ SYSTEM_PROMPT = """
 12. 申請条件（condition）は、可能な限り細かく抽出してください。
 """
 
-def get_extract_prompt(content: str) -> str:
-    return f"以下のMarkdownから支援制度情報を抽出してください:\n\n{content}"
+def get_extract_prompt(content: str, support_type_hint: str = None) -> str:
+    prompt = f"以下のMarkdownから支援制度情報を抽出してください:\n\n{content}"
+    if support_type_hint and support_type_hint != "unknown":
+        prompt = f"【ヒント】この制度の支援タイプは '{support_type_hint}' である可能性が高いです。\n\n" + prompt
+    return prompt
 
-def get_retry_prompt(original_json: str, error_msg: str) -> str:
-    return f"""
-前回の出力において以下のバリデーションエラーが発生しました:
-{error_msg}
+def call_eligibility_llm(client: OpenAI, content: str) -> ProgramEligibilityCandidate:
+    response = client.beta.chat.completions.parse(
+        model=settings.openai_model,
+        messages=[
+            {"role": "system", "content": ELIGIBILITY_SYSTEM_PROMPT},
+            {"role": "user", "content": f"以下のページを判定してください:\n\n{content[:5000]}"} # 先頭5000文字程度で判定
+        ],
+        response_format=ProgramEligibilityCandidate,
+    )
+    return response.choices[0].message.parsed
 
-以下のJSONを修正して、正しい形式で出力してください。
-許可されたEnum値（またはそれに近い日本語）を使用してください。
-不明な値は null または 'unknown' にしてください。
-
-元のJSON:
-{original_json}
-"""
-
-def call_llm(client: OpenAI, messages: List[Dict[str, str]]) -> ProgramExtractionCandidate:
+def call_extraction_llm(client: OpenAI, messages: List[Dict[str, str]]) -> ProgramExtractionCandidate:
     response = client.beta.chat.completions.parse(
         model=settings.openai_model,
         messages=messages,
@@ -266,24 +293,31 @@ def process_file(file_path: Path, client: OpenAI, db: Session, dry_run: bool) ->
     if not content:
         return False, "Empty file"
 
-    # Step 1: LLM Extraction with Retry
+    # Step 1: Eligibility Check
+    try:
+        eligibility = call_eligibility_llm(client, content)
+        if not eligibility.is_eligible:
+            return False, f"Not eligible: {eligibility.reason}"
+        print(f"    [+] Eligible ({eligibility.support_type.value}): {eligibility.reason}")
+    except Exception as e:
+        return False, f"Eligibility check failed: {str(e)}"
+
+    # Step 2: LLM Extraction with Retry
     extracted_data = None
     last_error = ""
     messages = [
         {"role": "system", "content": SYSTEM_PROMPT},
-        {"role": "user", "content": get_extract_prompt(content)}
+        {"role": "user", "content": get_extract_prompt(content, eligibility.support_type.value)}
     ]
 
     for attempt in range(3): # Initial + 2 retries
         try:
-            extracted_data = call_llm(client, messages)
+            extracted_data = call_extraction_llm(client, messages)
             break
         except Exception as e:
             last_error = str(e)
-            print(f"    [!] Attempt {attempt + 1} failed: {last_error}")
+            print(f"    [!] Extraction attempt {attempt + 1} failed: {last_error}")
             if attempt < 2:
-                # バリデーションエラーの内容と、(もし取得できれば)失敗したJSONを渡して修正を促す
-                # beta.parse では pydantic のエラーが含まれるため、それを get_retry_prompt に渡す
                 retry_msg = f"バリデーションエラーが発生しました。指示に従ってJSONを修正してください。\nエラー内容: {last_error}"
                 messages.append({"role": "user", "content": retry_msg})
             else:
@@ -292,17 +326,13 @@ def process_file(file_path: Path, client: OpenAI, db: Session, dry_run: bool) ->
     if not extracted_data:
         return False, "Failed to extract data"
 
-    # Step 2: Map to DB Schema (Moved up to support detailed preview in dry-run)
+    # Step 3: Map to DB Schema
     condition_data = None
     if extracted_data.condition:
-        # Convert snake_case to camelCase for ProgramConditionCreateRequest
         condition_dict = extracted_data.condition.model_dump()
-        
-        # Mapping helper
         def to_camel(snake_str):
             components = snake_str.split('_')
             return components[0] + ''.join(x.title() for x in components[1:])
-
         condition_data_camel = {to_camel(k): v for k, v in condition_dict.items()}
         condition_data = ProgramConditionCreateRequest(**condition_data_camel)
 
@@ -349,7 +379,7 @@ def process_file(file_path: Path, client: OpenAI, db: Session, dry_run: bool) ->
         print("-" * 40)
         return True, "Success (Dry-run preview)"
 
-    # Step 3: Check for Duplicates (Only for actual import)
+    # Step 4: Check for Duplicates
     existing = db.query(SupportProgram).filter(
         SupportProgram.title == extracted_data.title,
         SupportProgram.provider == extracted_data.provider
@@ -378,7 +408,6 @@ def main():
     client = OpenAI(api_key=settings.openai_api_key)
     db = SessionLocal()
 
-    # Get the directory where the script is located, then go up to apps/backend
     base_dir = Path(__file__).resolve().parent.parent
     output_dir = base_dir / "output"
     
@@ -390,7 +419,6 @@ def main():
     if args.file:
         f_path = Path(args.file)
         if not f_path.exists():
-            # Try relative to output_dir if not found
             f_path = output_dir / args.file
         
         if f_path.exists() and f_path.suffix == ".md":
@@ -419,7 +447,7 @@ def main():
             stats["success"] += 1
             print(f"    [+] SUCCESS: {message}")
         else:
-            if "Duplicate" in message or "Empty" in message:
+            if "Duplicate" in message or "Empty" in message or "Not eligible" in message:
                 stats["skipped"] += 1
                 print(f"    [-] SKIPPED: {message}")
             else:
@@ -428,7 +456,7 @@ def main():
         
         results.append({
             "file": file_path.name,
-            "status": "SUCCESS" if success else ("SKIPPED" if ("Duplicate" in message or "Empty" in message) else "FAILED"),
+            "status": "SUCCESS" if success else ("SKIPPED" if ("Duplicate" in message or "Empty" in message or "Not eligible" in message) else "FAILED"),
             "message": message
         })
 
