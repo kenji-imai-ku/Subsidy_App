@@ -3,6 +3,7 @@ import sys
 import json
 import argparse
 import hashlib
+import shutil
 from pathlib import Path
 from enum import Enum
 from typing import List, Optional, Dict, Any, Type
@@ -284,22 +285,39 @@ def call_extraction_llm(client: OpenAI, messages: List[Dict[str, str]]) -> Progr
 def process_file(file_path: Path, client: OpenAI, db: Session, dry_run: bool) -> (bool, str):
     print(f"[*] Processing {file_path.name}...")
     
+    # 処理後の移動先ディレクトリの準備
+    base_dir = file_path.parent
+    imported_dir = base_dir / "imported"
+    failed_dir = base_dir / "failed"
+
+    if not dry_run:
+        imported_dir.mkdir(exist_ok=True)
+        failed_dir.mkdir(exist_ok=True)
+
     try:
         with open(file_path, "r", encoding="utf-8") as f:
             content = f.read().strip()
     except Exception as e:
+        if not dry_run:
+            shutil.move(str(file_path), str(failed_dir / file_path.name))
         return False, f"File read error: {str(e)}"
     
     if not content:
+        if not dry_run:
+            shutil.move(str(file_path), str(failed_dir / file_path.name))
         return False, "Empty file"
 
     # Step 1: Eligibility Check
     try:
         eligibility = call_eligibility_llm(client, content)
         if not eligibility.is_eligible:
+            if not dry_run:
+                shutil.move(str(file_path), str(imported_dir / file_path.name)) # 対象外も処理済みとして扱う
             return False, f"Not eligible: {eligibility.reason}"
         print(f"    [+] Eligible ({eligibility.support_type.value}): {eligibility.reason}")
     except Exception as e:
+        if not dry_run:
+            shutil.move(str(file_path), str(failed_dir / file_path.name))
         return False, f"Eligibility check failed: {str(e)}"
 
     # Step 2: LLM Extraction with Retry
@@ -321,9 +339,13 @@ def process_file(file_path: Path, client: OpenAI, db: Session, dry_run: bool) ->
                 retry_msg = f"バリデーションエラーが発生しました。指示に従ってJSONを修正してください。\nエラー内容: {last_error}"
                 messages.append({"role": "user", "content": retry_msg})
             else:
+                if not dry_run:
+                    shutil.move(str(file_path), str(failed_dir / file_path.name))
                 return False, f"LLM Extraction failed after retries: {last_error}"
 
     if not extracted_data:
+        if not dry_run:
+            shutil.move(str(file_path), str(failed_dir / file_path.name))
         return False, "Failed to extract data"
 
     # Step 3: Map to DB Schema
@@ -379,20 +401,23 @@ def process_file(file_path: Path, client: OpenAI, db: Session, dry_run: bool) ->
         print("-" * 40)
         return True, "Success (Dry-run preview)"
 
-    # Step 4: Check for Duplicates
+    # Step 4: Check for Duplicates (Only for actual import)
     existing = db.query(SupportProgram).filter(
         SupportProgram.title == extracted_data.title,
         SupportProgram.provider == extracted_data.provider
     ).first()
     
     if existing:
+        shutil.move(str(file_path), str(imported_dir / file_path.name))
         return False, "Duplicate program (same title and provider)"
 
     try:
         db_program = program_service.create_program(db, program_request)
+        shutil.move(str(file_path), str(imported_dir / file_path.name))
         return True, f"Registered with ID: {db_program.id}"
     except Exception as e:
         db.rollback()
+        shutil.move(str(file_path), str(failed_dir / file_path.name))
         return False, f"DB Error: {str(e)}"
 
 def main():
@@ -415,7 +440,9 @@ def main():
         print(f"[!] Error: Directory {output_dir} not found.")
         sys.exit(1)
 
-    files_to_process = []
+    # 未処理のファイルのみを対象にする (サブディレクトリは含めない)
+    files_to_process = sorted([f for f in output_dir.glob("*.md") if f.is_file()])
+
     if args.file:
         f_path = Path(args.file)
         if not f_path.exists():
@@ -426,11 +453,9 @@ def main():
         else:
             print(f"[!] Error: File {args.file} not found or not a .md file.")
             sys.exit(1)
-    else:
-        files_to_process = sorted(list(output_dir.glob("*.md")))
 
     if not files_to_process:
-        print("[*] No Markdown files found to process.")
+        print("[*] No new Markdown files found to process in output/ directory.")
         return
 
     print(f"[*] Starting processing {len(files_to_process)} files...")

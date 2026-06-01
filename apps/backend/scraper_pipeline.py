@@ -6,10 +6,15 @@ import time
 import json
 import os
 import re
+import argparse
 from dotenv import load_dotenv
 from ddgs import DDGS
 from tavily import TavilyClient
 import hashlib
+
+# --- DB Imports ---
+from app.core.database import SessionLocal
+from app.models.program_source import ProgramSource
 
 # .envファイルから環境変数を読み込む
 load_dotenv()
@@ -34,8 +39,23 @@ client = OpenAI(api_key=OPENAI_API_KEY)
 # 関数定義
 # ==========================================
 
-def get_urls_from_search(query, num_results=50):
+def get_registered_urls():
     """
+    データベースから既に登録済みのURLを取得する
+    """
+    db = SessionLocal()
+    try:
+        urls = db.query(ProgramSource.source_url).all()
+        return set(url[0] for url in urls)
+    except Exception as e:
+        print(f"DBからのURL取得中にエラーが発生しました: {e}")
+        return set()
+    finally:
+        db.close()
+
+def get_urls_from_search(query, num_results=50):
+... (rest of function unchanged) ...
+
     DuckDuckGoを使用してURLを取得する
     """
     print(f"DuckDuckGoを使用してURLを取得中: {query}")
@@ -54,6 +74,7 @@ def get_urls_from_tavily(query, num_results=50):
     print(f"Tavily APIを使用してURLを取得中: {query}")
     try:
         tavily_client = TavilyClient(api_key=TAVILY_API_KEY)
+        # 検索品質を高めるため search_depth="advanced" も選択可能ですが、コスト節約のためデフォルト
         response = tavily_client.search(query=query, max_results=num_results)
         return [result["url"] for result in response.get("results", [])]
     except Exception as e:
@@ -104,7 +125,7 @@ def judge_support_program(title, description, client):
     * reason (string): 判定理由
 
 【判定ルール】
-* データ収集の網羅性を最優先します。受付期間が終了している可能性があったり、対象者が限定的であったりしても、少しでも「給付金・助成金・支援金・補助金」という制度の概要を説明しているページであれば、必ず is_target: true として抽出してください。
+* データ収集の網羅性を最優先します。受付期間が終了している可能性があったり、対象者が限定的であったりしても、少しでも「給付金・助成金・支援金・補助金・手当・減免・サービス提供」という制度の概要を説明しているページであれば、必ず is_target: true として抽出してください。
 * 議事録、入札情報、単なるニュースリリース、市役所へのアクセス案内など、「明らかに制度の説明ページではないノイズ」と断言できる場合のみ is_target: false にしてください。
 * 判定に迷った場合は、網羅性を重視して is_target: true としてください。
 
@@ -161,48 +182,85 @@ def main():
     """
     Step 4: メイン処理 (main) と ファイル出力
     """
+    parser = argparse.ArgumentParser(description="支援制度情報収集パイプライン")
+    parser.add_argument("--limit", type=int, default=100, help="取得するユニークURLの最大数 (default: 100)")
+    args = parser.parse_args()
+
     # 出力ディレクトリの作成
     output_dir = "output"
     os.makedirs(output_dir, exist_ok=True)
     
-    # 検索クエリリスト
-    queries = [
-        "site:www.city.kyoto.lg.jp 給付金",
-        "site:www.city.kyoto.lg.jp 助成金",
-        "site:www.city.kyoto.lg.jp 支援金",
-        "site:www.city.kyoto.lg.jp 補助金"
+    # 検索キーワードの抜本的な拡充（網羅性を担保する13ワード）
+    base_keywords = [
+        "給付", "助成", "補助", "手当",      # お金（直接的）
+        "支給", "交付",                    # お金（事務的）
+        "減免", "免除", "負担軽減",         # 負担を減らす
+        "貸付", "融資",                    # お金を借りる
+        "生活支援", "サービス提供"          # サービス・生活
     ]
+    
+    domain = "www.city.kyoto.lg.jp"
+    queries = [f"site:{domain} {kw}" for kw in base_keywords]
     
     cache_file = "search_cache.json"
     
     # キャッシュのチェック
+    # 注: limitが変わる可能性があるため、キャッシュがある場合も一応読み込みますが、
+    # 基本的には新規検索時にlimitを適用します。
+    target_urls = []
     if os.path.exists(cache_file):
         print("キャッシュからURLを読み込みました")
         with open(cache_file, "r", encoding="utf-8") as f:
             target_urls = json.load(f)
+            # キャッシュデータも指定された数に制限
+            if len(target_urls) > args.limit:
+                print(f"キャッシュ内のURLを {args.limit} 件に制限します")
+                target_urls = target_urls[:args.limit]
     else:
         # URLの取得（二刀流：DuckDuckGo + Tavily）
-        all_urls = []
+        unique_urls = set()
+        registered_urls = get_registered_urls()
+        print(f"DB登録済みのURL {len(registered_urls)} 件をスキップ対象として読み込みました。")
+        print(f"最大 {args.limit} 件の新しいユニークURLを収集します...")
+
         for query in queries:
+            if len(unique_urls) >= args.limit:
+                print(f"指定された上限 ({args.limit}件) に達したため、検索を終了します。")
+                break
+                
             # 1. DuckDuckGo検索
-            ddg_urls = get_urls_from_search(query, num_results=50)
-            all_urls.extend(ddg_urls)
+            ddg_urls = get_urls_from_search(query, num_results=20)
+            for url in ddg_urls:
+                if url in registered_urls:
+                    continue
+                unique_urls.add(url)
+                if len(unique_urls) >= args.limit:
+                    break
             
+            if len(unique_urls) >= args.limit:
+                break
+
             # 2. Tavily検索
-            tavily_urls = get_urls_from_tavily(query, num_results=50)
-            all_urls.extend(tavily_urls)
+            tavily_urls = get_urls_from_tavily(query, num_results=20)
+            for url in tavily_urls:
+                if url in registered_urls:
+                    continue
+                unique_urls.add(url)
+                if len(unique_urls) >= args.limit:
+                    break
             
             # APIへの負荷軽減
             time.sleep(1)
         
-        # 重複排除
-        target_urls = list(set(all_urls))
-        print(f"取得したURL総数: {len(all_urls)} -> 重複排除後: {len(target_urls)}")
+        target_urls = list(unique_urls)
+        print(f"収集完了: ユニークURL数 = {len(target_urls)}")
         
         # キャッシュに保存
         with open(cache_file, "w", encoding="utf-8") as f:
             json.dump(target_urls, f, ensure_ascii=False, indent=4)
     
+    # 以降、target_urlsに対して処理
+    # (既存のループ処理)
     for url in target_urls:
         try:
             # Step 1: 概要取得
@@ -226,12 +284,10 @@ def main():
             markdown_content = extract_markdown(url)
             
             # Step 4: ファイル出力
-            # URLからファイル名を生成（末尾のIDや名称を抽出）
             filename_match = re.search(r'([^/]+)\.html$', url)
             if filename_match:
                 filename = filename_match.group(1)
             else:
-                # htmlでない場合はハッシュやタイムスタンプなどで生成
                 filename = hashlib.md5(url.encode()).hexdigest()[:10]
                 
             file_path = os.path.join(output_dir, f"{filename}.md")
