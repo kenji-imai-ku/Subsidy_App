@@ -117,6 +117,7 @@ class SupportProgramCondition(Base):
 
     condition_description = Column(Text, nullable=True)
     condition_text_original = Column(Text, nullable=True)
+    is_extraordinary_condition = Column(Boolean, nullable=False, default=False)
     manual_check_required = Column(Boolean, nullable=False, default=False)
 
     program = relationship("SupportProgram", back_populates="condition")

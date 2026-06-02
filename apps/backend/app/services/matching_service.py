@@ -215,8 +215,33 @@ def calculate_match_score(profile, program, condition):
     # -------------------------
     # 6. 特殊条件・人間確認 (v2拡張)
     # -------------------------
+    if condition and getattr(condition, "is_extraordinary_condition", False) is True:
+        score -= 50  # 特殊条件の場合は大幅にスコアを下げる
+        warnings.append("災害や特殊な被害等に遭われた方向けの限定的な制度です")
+
     if condition and getattr(condition, "manual_check_required", False):
+        score -= 20  # AIが詳細確認を推奨するものは減点
         warnings.append("詳細な対象条件は、自治体の窓口等で確認が必要です")
+
+    # 信頼度による微調整
+    if getattr(program, "confidence_level", None) == "estimated":
+        score -= 5  # AI抽出データは信頼性の観点から微減点
+
+    # 具体的な条件設定が乏しい（汎用性が高すぎる）場合の調整
+    has_specific_condition = False
+    if condition:
+        fields_to_check = [
+            "min_age", "max_age", "max_annual_income", "requires_tax_exempt",
+            "requires_children", "requires_single_parent", "requires_disability",
+            "requires_unemployed", "requires_rent"
+        ]
+        for field in fields_to_check:
+            if getattr(condition, field, None) is not None:
+                has_specific_condition = True
+                break
+    
+    if not has_specific_condition:
+        score -= 5  # 具体的な制限がない広報的な制度は優先度をわずかに下げる
 
     # -------------------------
     # 7. 最終判定の集約

@@ -38,6 +38,7 @@ class ProgramConditionResponse(BaseModel):
     
     conditionDescription: Optional[str] = Field(None, validation_alias=AliasChoices("condition_description", "conditionDescription"))
     conditionTextOriginal: Optional[str] = Field(None, validation_alias=AliasChoices("condition_text_original", "conditionTextOriginal"))
+    isExtraordinaryCondition: Optional[bool] = Field(False, validation_alias=AliasChoices("is_extraordinary_condition", "isExtraordinaryCondition"))
     manualCheckRequired: bool = Field(False, validation_alias=AliasChoices("manual_check_required", "manualCheckRequired"))
 
     model_config = ConfigDict(from_attributes=True, populate_by_name=True)
@@ -71,6 +72,7 @@ class ProgramConditionCreateRequest(BaseModel):
     requiresRent: Optional[bool] = None
     conditionDescription: Optional[str] = None
     conditionTextOriginal: Optional[str] = None
+    isExtraordinaryCondition: Optional[bool] = False
     manualCheckRequired: bool = False
 
 

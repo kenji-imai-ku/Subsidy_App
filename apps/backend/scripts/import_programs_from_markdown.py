@@ -182,6 +182,7 @@ class ProgramConditionCandidate(BaseModel):
     requires_rent: Optional[bool] = None
     condition_description: Optional[str] = None
     condition_text_original: Optional[str] = None
+    is_extraordinary_condition: bool = Field(False, description="火災、天災、犯罪被害など、極めて稀で突発的な状況を対象とした制度か")
     manual_check_required: bool = False
 
 class ProgramExtractionCandidate(BaseModel):
@@ -253,7 +254,9 @@ SYSTEM_PROMPT = """
 10. uncertain_fields には、不確実な項目名を入れてください。
 11. manual_check_required は、条件が複雑・曖昧・原文確認が必要な場合は true にしてください。
 12. 申請条件（condition）は、可能な限り細かく抽出してください。
+13. 【重要】「火災による被災」「天災（地震・洪水等）」「交通事故」「DV被害」「犯罪被害」「特定の難病」「家族の死別」など、大多数の市民が日常的には直面しない、突発的かつ不幸な事態を前提とした制度（救済措置）の場合は、必ず condition 内の is_extraordinary_condition を true にしてください。これらは「知っていると得をする」一般的な支援ではなく、「有事の際の緊急救済」として区別する必要があります。
 """
+
 
 def get_extract_prompt(content: str, support_type_hint: str = None) -> str:
     prompt = f"以下のMarkdownから支援制度情報を抽出してください:\n\n{content}"

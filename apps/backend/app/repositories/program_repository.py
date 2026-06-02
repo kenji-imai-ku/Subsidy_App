@@ -141,10 +141,13 @@ def update_program(
 
 
 def list_programs_with_conditions(db: Session):
+    today = date.today()
     return (
         db.query(SupportProgram)
         .options(joinedload(SupportProgram.condition))
         .filter(SupportProgram.is_active == True)
+        .filter((SupportProgram.deadline == None) | (SupportProgram.deadline >= today))
+        .filter((SupportProgram.end_date == None) | (SupportProgram.end_date >= today))
         .order_by(SupportProgram.id.asc())
         .all()
     )
