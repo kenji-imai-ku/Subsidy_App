@@ -54,8 +54,7 @@ def get_registered_urls():
         db.close()
 
 def get_urls_from_search(query, num_results=50):
-... (rest of function unchanged) ...
-
+    """
     DuckDuckGoを使用してURLを取得する
     """
     print(f"DuckDuckGoを使用してURLを取得中: {query}")
@@ -74,7 +73,6 @@ def get_urls_from_tavily(query, num_results=50):
     print(f"Tavily APIを使用してURLを取得中: {query}")
     try:
         tavily_client = TavilyClient(api_key=TAVILY_API_KEY)
-        # 検索品質を高めるため search_depth="advanced" も選択可能ですが、コスト節約のためデフォルト
         response = tavily_client.search(query=query, max_results=num_results)
         return [result["url"] for result in response.get("results", [])]
     except Exception as e:
@@ -205,23 +203,20 @@ def main():
     cache_file = "search_cache.json"
     
     # キャッシュのチェック
-    # 注: limitが変わる可能性があるため、キャッシュがある場合も一応読み込みますが、
-    # 基本的には新規検索時にlimitを適用します。
-    target_urls = []
+    unique_urls = set()
     if os.path.exists(cache_file):
         print("キャッシュからURLを読み込みました")
         with open(cache_file, "r", encoding="utf-8") as f:
-            target_urls = json.load(f)
-            # キャッシュデータも指定された数に制限
-            if len(target_urls) > args.limit:
-                print(f"キャッシュ内のURLを {args.limit} 件に制限します")
-                target_urls = target_urls[:args.limit]
-    else:
-        # URLの取得（二刀流：DuckDuckGo + Tavily）
-        unique_urls = set()
-        registered_urls = get_registered_urls()
-        print(f"DB登録済みのURL {len(registered_urls)} 件をスキップ対象として読み込みました。")
-        print(f"最大 {args.limit} 件の新しいユニークURLを収集します...")
+            cached_urls = json.load(f)
+            for url in cached_urls:
+                unique_urls.add(url)
+    
+    registered_urls = get_registered_urls()
+    print(f"DB登録済みのURL {len(registered_urls)} 件をスキップ対象として読み込みました。")
+
+    # 指定された数に足りない場合のみ新規検索を実行
+    if len(unique_urls) < args.limit:
+        print(f"現在の候補数 ({len(unique_urls)}件) が上限 ({args.limit}件) 未満のため、新規検索を開始します...")
 
         for query in queries:
             if len(unique_urls) >= args.limit:
@@ -251,16 +246,18 @@ def main():
             
             # APIへの負荷軽減
             time.sleep(1)
-        
-        target_urls = list(unique_urls)
-        print(f"収集完了: ユニークURL数 = {len(target_urls)}")
-        
-        # キャッシュに保存
-        with open(cache_file, "w", encoding="utf-8") as f:
-            json.dump(target_urls, f, ensure_ascii=False, indent=4)
     
-    # 以降、target_urlsに対して処理
-    # (既存のループ処理)
+    # 最終的なリストを確定
+    target_urls = list(unique_urls)
+    if len(target_urls) > args.limit:
+        target_urls = target_urls[:args.limit]
+        
+    print(f"収集完了: 処理対象のユニークURL数 = {len(target_urls)}")
+    
+    # キャッシュに保存
+    with open(cache_file, "w", encoding="utf-8") as f:
+        json.dump(target_urls, f, ensure_ascii=False, indent=4)
+    
     for url in target_urls:
         try:
             # Step 1: 概要取得
