@@ -21,7 +21,7 @@ export default function LoginPage() {
         <section className="grid w-full overflow-hidden rounded-[8px] border border-slate-200 bg-white shadow-[0_24px_70px_-42px_rgba(15,23,42,0.55)] lg:grid-cols-[0.9fr_1.1fr]">
           <div className="bg-emerald-800 px-6 py-8 text-white sm:px-8 lg:px-10 lg:py-12">
             <p className="text-sm font-bold text-emerald-100">
-              給付金サポート
+              給付金ナビ
             </p>
             <h1 className="mt-4 text-2xl font-bold leading-tight sm:text-3xl">
               アカウントにログイン

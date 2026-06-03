@@ -28,7 +28,7 @@ export function AppHeader({ authAction = "login" }: AppHeaderProps) {
           </div>
           <div>
             <p className="text-lg font-bold leading-none text-slate-950">
-              給付金サポート
+              給付金ナビ
             </p>
             <p className="mt-1 text-xs font-semibold text-slate-500">
               あなたに合った給付金を、かんたん検索
